@@ -1,15 +1,14 @@
 "use client";
 
-export default function CancelModal({ appointment, onClose }: any) {
-  const handleCancel = () => {
-    const data = JSON.parse(localStorage.getItem("appointments") || "[]");
-    const updated = data.map((a: any) =>
-      a.id === appointment.id ? { ...a, status: "cancelled" } : a
-    );
-    localStorage.setItem("appointments", JSON.stringify(updated));
-    onClose();
-  };
+import { Appointment } from "@/types/appointment";
 
+type Props = {
+  appointment: Appointment;
+  onClose: () => void;
+  onConfirm: () => void; // ✅ Added this
+};
+
+export default function CancelModal({ appointment, onClose, onConfirm }: Props) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-xl shadow-xl text-center max-w-md space-y-3 text-gray-900">
@@ -28,7 +27,7 @@ export default function CancelModal({ appointment, onClose }: any) {
             No
           </button>
           <button
-            onClick={handleCancel}
+            onClick={onConfirm}
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
           >
             Yes, Cancel

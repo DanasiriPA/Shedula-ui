@@ -1,11 +1,12 @@
 "use client";
 
 import Image from "next/image";
+import { Appointment } from "@/types/appointment";
 
 type Props = {
-  appointment: any;
-  onCancel?: (appt: any) => void;
-  onReschedule?: (appt: any) => void;
+  appointment: Appointment;
+  onCancel?: (appt: Appointment) => void;
+  onReschedule?: (appt: Appointment) => void;
 };
 
 export default function AppointmentDetails({

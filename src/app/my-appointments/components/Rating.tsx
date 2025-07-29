@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+"use client";
 
-export default function Rating({ appointment }: { appointment?: any }) {
+import { useState, useEffect } from "react";
+import { Appointment } from "@/types/appointment";
+
+export default function Rating({ appointment }: { appointment?: Appointment }) {
   const [rating, setRating] = useState(appointment?.rating || 0);
 
   useEffect(() => {
@@ -13,7 +16,7 @@ export default function Rating({ appointment }: { appointment?: any }) {
     setRating(star);
     if (!appointment) return;
     const all = JSON.parse(localStorage.getItem("appointments") || "[]");
-    const updated = all.map((a: any) =>
+    const updated = (all as Appointment[]).map((a) =>
       a.id === appointment.id ? { ...a, rating: star } : a
     );
     localStorage.setItem("appointments", JSON.stringify(updated));
@@ -26,12 +29,16 @@ export default function Rating({ appointment }: { appointment?: any }) {
       {[1, 2, 3, 4, 5].map((star) => (
         <span
           key={star}
-          className={star <= rating ? "text-yellow-500 cursor-pointer text-xl" : "text-gray-400 cursor-pointer text-xl"}
+          className={
+            star <= rating
+              ? "text-yellow-500 cursor-pointer text-xl"
+              : "text-gray-400 cursor-pointer text-xl"
+          }
           onClick={() => handleRate(star)}
         >
           ★
         </span>
       ))}
-    </div>  
-    );
+    </div>
+  );
 }

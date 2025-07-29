@@ -2,12 +2,50 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
 import mockDoctors from "@/lib/mockDoctors";
 
+// Slot and Doctor types
+type Slot = {
+  time: string;
+  available: boolean;
+};
+
+type Doctor = {
+  id: string;
+  name: string;
+  avatar: string;
+  specialization: string;
+  age: number;
+  experience: number;
+  rating: number | string;
+  description: string;
+  availableSlots: Record<string, Slot[]>;
+};
+
+interface Appointment {
+  id: number;
+  doctorId: string;
+  doctorName?: string;
+  avatar?: string;
+  specialization?: string;
+  date: string;
+  time: string;
+  token: string;
+  patientName: string;
+  patientAge: string;
+  status: "upcoming" | "completed" | "cancelled";
+  createdAt: string;
+  notes: string;
+  rating: number;
+}
+
 export default function DoctorDetailPage() {
-  const { id } = useParams();
+  const params = useParams();
   const router = useRouter();
-  const doctor = mockDoctors.find((doc) => doc.id === id);
+
+  const id = typeof params.id === "string" ? params.id : "";
+  const doctor = mockDoctors.find((doc) => doc.id === id) as Doctor | undefined;
 
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
@@ -26,9 +64,9 @@ export default function DoctorDetailPage() {
     setTokenNumber(token);
     setPopup(true);
 
-    const existing = JSON.parse(localStorage.getItem("appointments") || "[]");
+    const existing: Appointment[] = JSON.parse(localStorage.getItem("appointments") || "[]");
 
-    const newAppointment = {
+    const newAppointment: Appointment = {
       id: Date.now(),
       doctorId: id,
       doctorName: doctor?.name,
@@ -59,10 +97,12 @@ export default function DoctorDetailPage() {
     <div className="min-h-screen p-6 bg-gray-50">
       <div className="max-w-xl mx-auto bg-white shadow-md rounded-lg p-6 space-y-4">
         <div className="flex items-center gap-4">
-          <img
+          <Image
             src={doctor.avatar}
             alt={doctor.name}
-            className="w-16 h-16 rounded-full object-cover"
+            width={64}
+            height={64}
+            className="rounded-full object-cover"
           />
           <div>
             <h2 className="text-xl font-bold text-gray-900">{doctor.name}</h2>
@@ -107,7 +147,7 @@ export default function DoctorDetailPage() {
             </label>
             <div className="flex flex-wrap gap-2">
               {doctor.availableSlots[selectedDate]
-                .filter((slot: any) => {
+                .filter((slot) => {
                   if (!slot.available) return false;
 
                   const now = new Date();
@@ -119,21 +159,20 @@ export default function DoctorDetailPage() {
 
                   return slotDateTime.getTime() > now.getTime();
                 })
-                .map((slot: any) => (
+                .map((slot) => (
                   <button
                     key={slot.time}
                     onClick={() => setSelectedTime(slot.time)}
-                    className={`px-3 py-1 rounded-full border text-sm font-semibold
-                      ${
-                        selectedTime === slot.time
-                          ? "ring-2 ring-blue-600"
-                          : "bg-green-100 text-green-800 border-green-400"
-                      }`}
+                    className={`px-3 py-1 rounded-full border text-sm font-semibold ${
+                      selectedTime === slot.time
+                        ? "ring-2 ring-blue-600"
+                        : "bg-green-100 text-green-800 border-green-400"
+                    }`}
                   >
                     {slot.time}
                   </button>
                 ))}
-              {doctor.availableSlots[selectedDate].every((slot: any) => {
+              {doctor.availableSlots[selectedDate].every((slot) => {
                 const [hourStr, minuteStr] = slot.time.split(":");
                 const slotDateTime = new Date(selectedDate);
                 slotDateTime.setHours(parseInt(hourStr));
@@ -149,9 +188,7 @@ export default function DoctorDetailPage() {
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-bold text-gray-900 mb-1">
-              Your Name
-            </label>
+            <label className="block text-sm font-bold text-gray-900 mb-1">Your Name</label>
             <input
               value={patientName}
               onChange={(e) => setPatientName(e.target.value)}
@@ -160,9 +197,7 @@ export default function DoctorDetailPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-gray-900 mb-1">
-              Your Age
-            </label>
+            <label className="block text-sm font-bold text-gray-900 mb-1">Your Age</label>
             <input
               type="number"
               value={patientAge}
@@ -184,9 +219,7 @@ export default function DoctorDetailPage() {
       {popup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl p-6 text-center space-y-3 max-w-sm">
-            <h2 className="text-xl font-bold text-green-700">
-              ✅ Appointment Booked!
-            </h2>
+            <h2 className="text-xl font-bold text-green-700">✅ Appointment Booked!</h2>
             <p className="text-lg text-gray-900">
               Token No: <strong>{tokenNumber}</strong>
             </p>

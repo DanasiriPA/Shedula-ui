@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+// ✅ Type Definitions
 const schema = yup.object().shape({
   email: yup.string().email().required("Email is required"),
   password: yup.string().min(6, "Min 6 characters").required("Password is required"),
@@ -16,6 +17,12 @@ type FormData = {
   email: string;
   password: string;
 };
+
+interface User {
+  patientemail: string;
+  patientpassword: string;
+  [key: string]: unknown;
+}
 
 export default function SignupPage() {
   const {
@@ -38,10 +45,10 @@ export default function SignupPage() {
 
   const onSubmit = async (data: FormData) => {
     const res = await fetch(`https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin`);
-    const existingUsers = await res.json();
+    const existingUsers: User[] = await res.json();
 
     const alreadyExists = existingUsers.find(
-      (user: any) => user.patientemail === data.email
+      (user) => user.patientemail === data.email
     );
 
     if (alreadyExists) {

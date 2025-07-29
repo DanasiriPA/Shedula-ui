@@ -1,10 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import { Appointment } from "@/types/appointment";
 import mockDoctors from "@/lib/mockDoctors";
 import { format } from "date-fns";
 
-export default function RescheduleModal({ appointment, onClose }: any) {
+interface Props {
+  appointment: Appointment;
+  onClose: () => void;
+  onSave: (apptId: number, newDate: string, newTime: string) => void;
+}
+
+type Slot = {
+  time: string;
+  available: boolean;
+};
+
+export default function RescheduleModal({ appointment, onClose, onSave }: Props) {
   const doctor = mockDoctors.find((doc) => doc.id === appointment.doctorId);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
@@ -20,14 +32,7 @@ export default function RescheduleModal({ appointment, onClose }: any) {
       alert("Select date and time");
       return;
     }
-
-    const data = JSON.parse(localStorage.getItem("appointments") || "[]");
-    const updated = data.map((a: any) =>
-      a.id === appointment.id
-        ? { ...a, date: selectedDate, time: selectedTime }
-        : a
-    );
-    localStorage.setItem("appointments", JSON.stringify(updated));
+    onSave(appointment.id, selectedDate, selectedTime);
     onClose();
   };
 
@@ -62,7 +67,7 @@ export default function RescheduleModal({ appointment, onClose }: any) {
           <div>
             <label className="font-semibold">Select Time:</label>
             <div className="flex flex-wrap gap-2 mt-2">
-              {doctor?.availableSlots?.[selectedDate]?.map((slot: any) => (
+              {doctor?.availableSlots?.[selectedDate]?.map((slot: Slot) => (
                 <button
                   key={slot.time}
                   disabled={!slot.available}

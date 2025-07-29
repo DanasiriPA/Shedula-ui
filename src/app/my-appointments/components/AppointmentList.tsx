@@ -1,14 +1,27 @@
 "use client";
 
 import AppointmentDetails from "./AppointmentDetails";
+import { Appointment } from "@/types/appointment";
 
-export default function AppointmentList({ title, appointments, onCancel, onReschedule }: any) {
+type Props = {
+  title: string;
+  appointments: Appointment[];
+  onCancel?: (appt: Appointment) => void;
+  onReschedule?: (appt: Appointment) => void;
+};
+
+export default function AppointmentList({
+  title,
+  appointments,
+  onCancel,
+  onReschedule,
+}: Props) {
   return (
     <div>
       <h2 className="text-xl font-semibold mb-3">{title}</h2>
       <div className="space-y-4">
         {appointments.length > 0 ? (
-          appointments.map((appt: any) => (
+          appointments.map((appt) => (
             <AppointmentDetails
               key={appt.id}
               appointment={appt}

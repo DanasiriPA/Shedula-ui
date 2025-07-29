@@ -7,21 +7,29 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+// ✅ Validation schema
 const schema = yup.object().shape({
   doctorId: yup.string().required("Doctor ID is required"),
   password: yup.string().min(6).required("Password is required"),
 });
 
+// ✅ Form data type
 type FormData = {
   doctorId: string;
   password: string;
+};
+
+// ✅ Doctor type for fetched data
+type Doctor = {
+  doctorId: string;
+  password: string;
+  // Add other fields if needed
 };
 
 export default function DoctorLogin() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
@@ -46,7 +54,7 @@ export default function DoctorLogin() {
     link.rel = "stylesheet";
     document.head.appendChild(link);
 
-    // Only prefill if "rememberDoctor" is true AND user is returning
+    // Prefill "Remember Me" if previously selected
     const stored = localStorage.getItem("rememberDoctor") === "true";
     if (stored) {
       setRememberMe(true);
@@ -56,10 +64,10 @@ export default function DoctorLogin() {
   const onSubmit = async (data: FormData) => {
     try {
       const res = await fetch("http://localhost:4000/doctors");
-      const doctors = await res.json();
+      const doctors: Doctor[] = await res.json();
 
       const match = doctors.find(
-        (doc: any) =>
+        (doc) =>
           doc.doctorId === data.doctorId && doc.password === data.password
       );
 

@@ -8,6 +8,7 @@ import RescheduleModal from "@/app/my-appointments/components/RescheduleModal";
 import CancelModal from "@/app/my-appointments/components/CancelModal";
 import Rating from "@/app/my-appointments/components/Rating";
 import NotesSection from "@/app/my-appointments/components/NotesSection";
+import { Appointment } from "@/types/appointment";
 
 // Helper to parse time string into hours and minutes
 function parseTimeString(time: string): { hour: number; minute: number } {
@@ -49,10 +50,10 @@ function getTimeRemaining(date: string, time: string): string {
 }
 
 export default function MyAppointmentsPage() {
-  const [appointments, setAppointments] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [showCancelled, setShowCancelled] = useState(false);
   const [showVisited, setShowVisited] = useState(false);
-  const [selectedAppt, setSelectedAppt] = useState<any>(null);
+  const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
   const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const router = useRouter();
@@ -60,10 +61,10 @@ export default function MyAppointmentsPage() {
   useEffect(() => {
     const stored = localStorage.getItem("appointments");
     if (stored) {
-      const allAppointments = JSON.parse(stored);
+      const allAppointments = JSON.parse(stored) as Appointment[];
       const now = new Date();
 
-      const updatedAppointments = allAppointments.map((appt: any) => {
+      const updatedAppointments: Appointment[] = allAppointments.map((appt) => {
         const { hour, minute } = parseTimeString(appt.time);
         const apptDateTime = new Date(appt.date);
         apptDateTime.setHours(hour);
@@ -84,18 +85,18 @@ export default function MyAppointmentsPage() {
     }
   }, []);
 
-  const handleReschedule = (appt: any) => {
+  const handleReschedule = (appt: Appointment) => {
     setSelectedAppt(appt);
     setShowRescheduleModal(true);
   };
 
-  const handleCancel = (appt: any) => {
+  const handleCancel = (appt: Appointment) => {
     setSelectedAppt(appt);
     setShowCancelModal(true);
   };
 
   const applyReschedule = (apptId: number, newDate: string, newTime: string) => {
-    const updated = appointments.map((a) =>
+    const updated: Appointment[] = appointments.map((a) =>
       a.id === apptId ? { ...a, date: newDate, time: newTime } : a
     );
     localStorage.setItem("appointments", JSON.stringify(updated));
@@ -104,7 +105,7 @@ export default function MyAppointmentsPage() {
   };
 
   const confirmCancel = (apptId: number) => {
-    const updated = appointments.map((a) =>
+    const updated: Appointment[] = appointments.map((a) =>
       a.id === apptId ? { ...a, status: "cancelled" } : a
     );
     localStorage.setItem("appointments", JSON.stringify(updated));
@@ -118,7 +119,7 @@ export default function MyAppointmentsPage() {
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-blue-100 via-white to-blue-50">
-      {/* Header with Logo and Back Button */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={() => router.push("/dashboard")}
@@ -128,25 +129,22 @@ export default function MyAppointmentsPage() {
         </button>
         <div className="flex flex-col items-center flex-grow">
           <div className="flex flex-col items-center gap-2">
-  <Image
-    src="https://i.postimg.cc/SKnMMNcw/360-F-863843181-63-Nv8tgy-BU8-X26-B1-Lq-Qvfi0tn95aj-Sg-X.jpg"
-    alt="Shedula Logo"
-    width={50}
-    height={50}
-    className="rounded-full"
-  />
-  <h1
-    className="text-4xl text-blue-700"
-    style={{ fontFamily: "'Lobster', cursive" }}
-  >
-    Shedula
-  </h1>
-  <p className="text-sm text-gray-600 italic">
-    Find the right doctor for your needs
-  </p>
-</div>
+            <Image
+              src="https://i.postimg.cc/SKnMMNcw/360-F-863843181-63-Nv8tgy-BU8-X26-B1-Lq-Qvfi0tn95aj-Sg-X.jpg"
+              alt="Shedula Logo"
+              width={50}
+              height={50}
+              className="rounded-full"
+            />
+            <h1 className="text-4xl text-blue-700" style={{ fontFamily: "'Lobster', cursive" }}>
+              Shedula
+            </h1>
+            <p className="text-sm text-gray-600 italic">
+              Find the right doctor for your needs
+            </p>
+          </div>
         </div>
-        <div className="w-6" /> {/* Spacer to balance back button */}
+        <div className="w-6" />
       </div>
 
       {/* Page Title and Toggles */}
@@ -201,13 +199,13 @@ export default function MyAppointmentsPage() {
           {cancelledAppointments.length === 0 ? (
             <p className="text-gray-800">No cancelled appointments.</p>
           ) : (
-            cancelledAppointments.map((app) => (
+            cancelledAppointments.map((app)             => (
               <div key={app.id} className="bg-white rounded-xl p-4 shadow-md mb-4">
                 <AppointmentDetails appointment={app} />
                 <div className="mt-3 text-gray-900 text-sm">
                   <p><strong>Patient:</strong> {app.patientName}, Age {app.patientAge}</p>
                   {app.description && <p><strong>Description:</strong> {app.description}</p>}
-                                </div>
+                </div>
                 <div className="mt-2 text-gray-900">
                   <Rating appointment={app} />
                   <NotesSection appointment={app} />
@@ -256,7 +254,7 @@ export default function MyAppointmentsPage() {
         <CancelModal
           appointment={selectedAppt}
           onClose={() => setShowCancelModal(false)}
-          onConfirm={() => confirmCancel(selectedAppt.id)}
+          onConfirm={() => selectedAppt && confirmCancel(selectedAppt.id)}
         />
       )}
     </div>

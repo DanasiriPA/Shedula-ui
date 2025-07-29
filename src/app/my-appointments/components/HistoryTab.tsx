@@ -1,15 +1,17 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import AppointmentDetails from "./AppointmentDetails";
+import { Appointment } from "@/types/appointment";
 
 export default function HistoryTab() {
-  const [appointments, setAppointments] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
 
   useEffect(() => {
     const all = JSON.parse(localStorage.getItem("appointments") || "[]");
-    // Show only completed or cancelled appointments
     setAppointments(
-      all.filter(
-        (a: any) => a.status === "completed" || a.status === "cancelled"
+      (all as Appointment[]).filter(
+        (a) => a.status === "completed" || a.status === "cancelled"
       )
     );
   }, []);
@@ -23,6 +25,6 @@ export default function HistoryTab() {
           <AppointmentDetails key={appt.id} appointment={appt} />
         ))
       )}
-    </div>  
+    </div>
   );
 }

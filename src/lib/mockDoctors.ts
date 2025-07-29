@@ -1,3 +1,27 @@
+interface Slot {
+  time: string;
+  available: boolean;
+}
+
+type SlotMap = {
+  [date: string]: Slot[];
+};
+
+interface Doctor {
+  id: string;
+  name: string;
+  age: number;
+  gender: "male" | "female";
+  experience: number;
+  avatar: string;
+  available: boolean;
+  specialization: string;
+  location: string;
+  description: string;
+  rating: string;
+  availableSlots: SlotMap;
+}
+
 const doctorFirstNames = [
   "Aarav", "Priya", "Rohan", "Meera", "Vikram", "Sneha", "Rahul", "Divya", "Karan", "Lakshmi", "Anil", "Ritu", "Nikhil", "Shalini"
 ];
@@ -30,19 +54,18 @@ const specialties = [
   "Gyno", "Neuro", "Skin", "Heart", "Child Specialist", "General", "Ortho", "Dental", "Eye", "Psychiatry", "Oncology", "Kidney", "Pulmonology", "Gastroenterology"
 ];
 
-const generateDates = () => {
-  const days = Array.from({ length: 7 }).map((_, i) => {
+const generateDates = (): string[] => {
+  return Array.from({ length: 7 }).map((_, i) => {
     const d = new Date();
     d.setDate(d.getDate() + i);
     return d.toISOString().split("T")[0];
   });
-  return days;
 };
 
-const generateSlots = () => {
+const generateSlots = (): SlotMap => {
   const dates = generateDates();
   const sampleTimes = ["09:00 AM", "10:30 AM", "12:00 PM", "02:00 PM", "03:30 PM", "05:00 PM"];
-  const slotMap: any = {};
+  const slotMap: SlotMap = {};
   dates.forEach((d) => {
     slotMap[d] = sampleTimes.map((time) => ({
       time,
@@ -52,7 +75,7 @@ const generateSlots = () => {
   return slotMap;
 };
 
-const mockDoctors = specialties.flatMap((spec, idx) => {
+const mockDoctors: Doctor[] = specialties.flatMap((spec, idx) => {
   const base = {
     specialization: spec,
     location: "Chennai",
@@ -61,7 +84,7 @@ const mockDoctors = specialties.flatMap((spec, idx) => {
     availableSlots: generateSlots(),
   };
 
-  const available = {
+  const available: Doctor = {
     id: (idx * 2 + 1).toString(),
     name: `Dr. ${doctorFirstNames[idx]} Kumar`,
     age: 35 + (idx % 10),
@@ -72,7 +95,7 @@ const mockDoctors = specialties.flatMap((spec, idx) => {
     ...base
   };
 
-  const unavailable = {
+  const unavailable: Doctor = {
     id: (idx * 2 + 2).toString(),
     name: `Dr. ${doctorFirstNames[idx]} Sharma`,
     age: 32 + (idx % 10),

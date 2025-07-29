@@ -3,9 +3,10 @@
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+// ✅ Validation schemas
 const emailSchema = yup.object().shape({
   email: yup.string().email("Invalid email").required("Email is required"),
 });
@@ -13,6 +14,22 @@ const emailSchema = yup.object().shape({
 const codeSchema = yup.object().shape({
   code: yup.string().length(4, "Code must be 4 digits").required("Code required"),
 });
+
+// ✅ Types
+type EmailFormData = {
+  email: string;
+};
+
+type CodeFormData = {
+  code: string;
+};
+
+type User = {
+  id: string;
+  email: string;
+  password: string;
+  // Add other fields if needed
+};
 
 export default function ForgotPasswordPage() {
   const [emailSent, setEmailSent] = useState(false);
@@ -25,7 +42,7 @@ export default function ForgotPasswordPage() {
     register: registerEmail,
     handleSubmit: handleEmailSubmit,
     formState: { errors: emailErrors },
-  } = useForm({
+  } = useForm<EmailFormData>({
     resolver: yupResolver(emailSchema),
   });
 
@@ -33,16 +50,16 @@ export default function ForgotPasswordPage() {
     register: registerCode,
     handleSubmit: handleCodeSubmit,
     formState: { errors: codeErrors },
-  } = useForm({
+  } = useForm<CodeFormData>({
     resolver: yupResolver(codeSchema),
   });
 
-  const handleEmail = async (data: any) => {
+  const handleEmail = async (data: EmailFormData) => {
     try {
       const res = await fetch("http://localhost:4000/users");
-      const users = await res.json();
+      const users: User[] = await res.json();
 
-      const user = users.find((u: any) => u.email === data.email);
+      const user = users.find((u) => u.email === data.email);
 
       if (!user) {
         setErrorMsg("❌ Email not registered");
@@ -54,12 +71,12 @@ export default function ForgotPasswordPage() {
         alert(`Your 4-digit code: ${randomCode}`);
         setErrorMsg("");
       }
-    } catch (err) {
+    } catch {
       setErrorMsg("Something went wrong!");
     }
   };
 
-  const handleCode = (data: any) => {
+  const handleCode = (data: CodeFormData) => {
     if (data.code === code) {
       localStorage.setItem("rememberMe", "true");
       localStorage.setItem("email", email);

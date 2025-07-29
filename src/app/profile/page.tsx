@@ -2,6 +2,7 @@
 
 import { useState, useEffect, ChangeEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image'; // ✅ Import Next.js Image component
 
 interface FormData {
   name: string;
@@ -150,10 +151,13 @@ const PatientProfilePage = () => {
         <button onClick={handleBack} className="text-blue-600 hover:underline mb-4">← Back</button>
 
         <div className="flex flex-col items-center space-y-2 mb-6">
-          <img
+          <Image
             src="https://i.postimg.cc/SKnMMNcw/360-F-863843181-63-Nv8tgy-BU8-X26-B1-Lq-Qvfi0tn95aj-Sg-X.jpg"
             alt="Shedula Logo"
-            className="w-16 h-16 rounded-full"
+            width={64}
+            height={64}
+            className="rounded-full"
+            unoptimized
           />
           <h2 className="text-3xl text-blue-700" style={{ fontFamily: "'Lobster', cursive" }}>Shedula</h2>
           <p className="text-sm text-gray-600 italic">Your health, your records, your control</p>

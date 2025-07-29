@@ -4,16 +4,58 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
+// ✅ Type Definitions
+interface EmergencySummary {
+  allergies: string;
+  medications: string;
+  conditions: string;
+  emergencyContact: string;
+}
+
+interface MedicalHistoryItem {
+  id: number;
+  department: string;
+  date: string;
+  notes: string;
+}
+
+interface Vitals {
+  bloodPressure: string;
+  heartRate: string;
+  glucose: string;
+  weight: string;
+}
+
+interface Prescription {
+  id: number;
+  medicine: string;
+  dosage: string;
+  frequency: string;
+  doctor: string;
+  date: string;
+}
+
+interface DoctorNote {
+  id: number;
+  doctor: string;
+  note: string;
+}
+
+interface HealthGoal {
+  id: number;
+  goal: string;
+}
+
 export default function RecordsPage() {
   const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const [emergency, setEmergency] = useState<any>(null);
-  const [history, setHistory] = useState<any[]>([]);
-  const [vitals, setVitals] = useState<any>(null);
-  const [prescriptions, setPrescriptions] = useState<any[]>([]);
-  const [doctorNotes, setDoctorNotes] = useState<any[]>([]);
-  const [goals, setGoals] = useState<any[]>([]);
+  const [emergency, setEmergency] = useState<EmergencySummary | null>(null);
+  const [history, setHistory] = useState<MedicalHistoryItem[]>([]);
+  const [vitals, setVitals] = useState<Vitals | null>(null);
+  const [prescriptions, setPrescriptions] = useState<Prescription[]>([]);
+  const [doctorNotes, setDoctorNotes] = useState<DoctorNote[]>([]);
+  const [goals, setGoals] = useState<HealthGoal[]>([]);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -176,11 +218,11 @@ export default function RecordsPage() {
 
       {/* Health Goals */}
       <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 mb-2">🎯 Health Goals</h2>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">        🎯 Health Goals</h2>
         <ul className="list-disc pl-5 text-sm text-gray-800 space-y-1">
           {goals.map((g) => (
             <li key={g.id}>{g.goal}</li>
-                      ))}
+          ))}
         </ul>
       </div>
 

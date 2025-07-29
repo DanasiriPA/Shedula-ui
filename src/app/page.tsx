@@ -17,6 +17,16 @@ type FormData = {
   password: string;
 };
 
+type RememberedUser = {
+  email: string;
+  password: string;
+};
+
+type APIUser = {
+  patientemail: string;
+  patientpassword: string;
+};
+
 export default function LoginPage() {
   const {
     register,
@@ -55,14 +65,14 @@ export default function LoginPage() {
     const input = e.target.value;
     setValue("email", input);
 
-    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]");
+    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
     const matchedEmails = remembered
-      .filter((user: any) => user.email.startsWith(input))
-      .map((user: any) => user.email);
+      .filter((user) => user.email.startsWith(input))
+      .map((user) => user.email);
 
     setEmailSuggestions(matchedEmails);
 
-    const exactMatch = remembered.find((user: any) => user.email === input);
+    const exactMatch = remembered.find((user) => user.email === input);
     if (exactMatch) {
       setValue("password", exactMatch.password);
       setShowPassword(true);
@@ -74,8 +84,8 @@ export default function LoginPage() {
 
   const handleSuggestionClick = (email: string) => {
     setValue("email", email);
-    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]");
-    const match = remembered.find((user: any) => user.email === email);
+    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
+    const match = remembered.find((user) => user.email === email);
     if (match) {
       setValue("password", match.password);
       setShowPassword(true);
@@ -86,16 +96,16 @@ export default function LoginPage() {
   const onSubmit = async (data: FormData) => {
     try {
       const res = await fetch("https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin");
-      const users = await res.json();
+      const users: APIUser[] = await res.json();
 
       const match = users.find(
-        (u: any) => u.patientemail === data.email && u.patientpassword === data.password
+        (u) => u.patientemail === data.email && u.patientpassword === data.password
       );
 
       if (match) {
         if (rememberMe) {
-          const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]");
-          const filtered = remembered.filter((u: any) => u.email !== data.email);
+          const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
+          const filtered = remembered.filter((u) => u.email !== data.email);
           filtered.push({ email: data.email, password: data.password });
           localStorage.setItem("rememberedUsers", JSON.stringify(filtered));
         } else {
@@ -141,7 +151,7 @@ export default function LoginPage() {
             Shedula
           </h1>
           <p className="text-sm text-gray-600 italic mt-2 text-center">
-            Find the right doctor for your needs
+            Find the right doctor for your needs&nbsp;&mdash;&nbsp;we&apos;re here to help.
           </p>
         </div>
 
@@ -233,7 +243,7 @@ export default function LoginPage() {
                 <input
                   type="checkbox"
                   checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
+                                    onChange={(e) => setRememberMe(e.target.checked)}
                   className="form-checkbox text-blue-600"
                 />
                 Remember me
@@ -243,7 +253,7 @@ export default function LoginPage() {
               </a>
             </div>
 
-                        {/* Error Message */}
+            {/* Error Message */}
             {errorMsg && (
               <p className="text-red-500 text-center text-sm">{errorMsg}</p>
             )}
@@ -285,7 +295,7 @@ export default function LoginPage() {
 
             {/* Signup Link */}
             <p className="text-sm text-center mt-4 text-black">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <a href="/signup" className="text-blue-600 hover:underline">
                 Sign up
               </a>

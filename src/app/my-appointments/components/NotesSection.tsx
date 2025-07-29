@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+"use client";
 
-export default function NotesSection({ appointment }: { appointment?: any }) {
+import { useState, useEffect } from "react";
+import { Appointment } from "@/types/appointment";
+
+export default function NotesSection({ appointment }: { appointment?: Appointment }) {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -12,7 +15,7 @@ export default function NotesSection({ appointment }: { appointment?: any }) {
   const handleSave = () => {
     if (!appointment) return;
     const all = JSON.parse(localStorage.getItem("appointments") || "[]");
-    const updated = all.map((a: any) =>
+    const updated = (all as Appointment[]).map((a) =>
       a.id === appointment.id ? { ...a, notes } : a
     );
     localStorage.setItem("appointments", JSON.stringify(updated));
@@ -25,7 +28,7 @@ export default function NotesSection({ appointment }: { appointment?: any }) {
         className="w-full border rounded p-2"
         placeholder="Add notes or doctor's advice..."
         value={notes}
-        onChange={e => setNotes(e.target.value)}
+        onChange={(e) => setNotes(e.target.value)}
       />
       {appointment && (
         <button

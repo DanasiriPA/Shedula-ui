@@ -2,17 +2,21 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Appointment } from "@/types/appointment";
+import Image from "next/image";
 
 export default function AppointmentDetailPage() {
   const { id } = useParams();
-  const [appointment, setAppointment] = useState<any | null>(null);
+  const [appointment, setAppointment] = useState<Appointment | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("appointments");
     if (stored) {
       const appointments = JSON.parse(stored);
-      const found = appointments.find((a: any) => a.id.toString() === id);
-      setAppointment(found);
+      const found = (appointments as Appointment[]).find(
+        (a) => a.id.toString() === id
+      );
+      setAppointment(found || null);
     }
   }, [id]);
 
@@ -27,10 +31,12 @@ export default function AppointmentDetailPage() {
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-xl mx-auto bg-white shadow-lg rounded-lg p-6 space-y-4">
         <div className="flex items-center gap-4">
-          <img
+          <Image
             src={appointment.avatar}
             alt={appointment.doctorName}
-            className="w-16 h-16 rounded-full object-cover"
+            width={64}
+            height={64}
+            className="rounded-full object-cover"
           />
           <div>
             <h2 className="text-xl font-bold text-gray-900">
