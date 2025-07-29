@@ -1,0 +1,27 @@
+{
+  "users": [
+    {
+      "id": "b626",
+      "email": "abc@123.com",
+      "password": "123456"
+    },
+    {
+      "id": "dc74",
+      "email": "xyz@123.com",
+      "password": "654321"
+    },
+    {
+      "id": "be76",
+      "email": "googleuser@gmail.com",
+      "password": "google123"
+    }
+  ],
+  "doctors": [
+    {
+      "id": 1,
+      "doctorId": "dr123",
+      "password": "pass123"
+    }
+  ],
+  "patients": []
+}
