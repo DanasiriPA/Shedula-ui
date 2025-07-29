@@ -42,6 +42,7 @@ A responsive, feature-rich doctor appointment scheduling application built using
 ✅ Real-time chat with doctors
 
 ✅ Responsive calendar view
+
 ## 🙌 Acknowledgements
 
 Next.js
