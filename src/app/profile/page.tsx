@@ -1,14 +1,36 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ChangeEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+
+interface FormData {
+  name: string;
+  age: string;
+  gender: string;
+  location: string;
+  email: string;
+  phone: string;
+  dob: string;
+  bloodGroup: string;
+  lifestyle: string;
+  dietary: string;
+  wellnessGoals: string;
+  insuranceProvider: string;
+  policyNumber: string;
+  idProof: string;
+  emergencyName: string;
+  emergencyRelation: string;
+  emergencyPhone: string;
+  reminders: boolean;
+  emailUpdates: boolean;
+}
 
 const PatientProfilePage = () => {
   const router = useRouter();
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isEditing, setIsEditing] = useState(true);
 
-  const initialFormState = {
+  const initialFormState: FormData = {
     name: '',
     age: '',
     gender: '',
@@ -30,7 +52,7 @@ const PatientProfilePage = () => {
     emailUpdates: false,
   };
 
-  const [formData, setFormData] = useState(initialFormState);
+  const [formData, setFormData] = useState<FormData>(initialFormState);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -71,7 +93,7 @@ const PatientProfilePage = () => {
     fetchPatient();
   }, []);
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -189,17 +211,27 @@ const PatientProfilePage = () => {
               <InputGrid>
                 <Input label="Contact Name" name="emergencyName" value={formData.emergencyName} onChange={handleChange} />
                 <Input label="Relation" name="emergencyRelation" value={formData.emergencyRelation} onChange={handleChange} />
-                <Input label="Phone" name="emergencyPhone" type="tel" value={formData.emergencyPhone} onChange={handleChange} />
+                                <Input label="Phone" name="emergencyPhone" type="tel" value={formData.emergencyPhone} onChange={handleChange} />
               </InputGrid>
             </Section>
 
             <Section title="Notifications & Settings">
               <div className="space-y-2">
-                <Checkbox label="Appointment Reminders" name="reminders" checked={formData.reminders} onChange={handleChange} />
-                <Checkbox label="Email Updates" name="emailUpdates" checked={formData.emailUpdates} onChange={handleChange} />
+                <Checkbox
+                  label="Appointment Reminders"
+                  name="reminders"
+                  checked={formData.reminders}
+                  onChange={handleChange}
+                />
+                <Checkbox
+                  label="Email Updates"
+                  name="emailUpdates"
+                  checked={formData.emailUpdates}
+                  onChange={handleChange}
+                />
               </div>
             </Section>
-                    </form>
+          </form>
         ) : (
           <div className="space-y-4 text-gray-800">
             {Object.entries(formData).map(([key, value]) => (
@@ -249,18 +281,36 @@ const PatientProfilePage = () => {
 };
 
 // Reusable Components
-const Section = ({ title, children }) => (
+
+interface SectionProps {
+  title: string;
+  children: ReactNode;
+}
+
+const Section = ({ title, children }: SectionProps) => (
   <div>
     <h2 className="text-xl font-semibold text-gray-700 mb-4">{title}</h2>
     {children}
   </div>
 );
 
-const InputGrid = ({ children }) => (
+interface InputGridProps {
+  children: ReactNode;
+}
+
+const InputGrid = ({ children }: InputGridProps) => (
   <div className="grid grid-cols-2 gap-4">{children}</div>
 );
 
-const Input = ({ label, name, type = 'text', value, onChange }) => (
+interface InputProps {
+  label: string;
+  name: keyof FormData;
+  type?: string;
+  value: string;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+}
+
+const Input = ({ label, name, type = 'text', value, onChange }: InputProps) => (
   <div className="flex flex-col">
     <label className="text-sm font-medium text-gray-700 mb-1">{label}</label>
     <input
@@ -273,7 +323,14 @@ const Input = ({ label, name, type = 'text', value, onChange }) => (
   </div>
 );
 
-const Checkbox = ({ label, name, checked, onChange }) => (
+interface CheckboxProps {
+  label: string;
+  name: keyof FormData;
+  checked: boolean;
+  onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+}
+
+const Checkbox = ({ label, name, checked, onChange }: CheckboxProps) => (
   <label className="flex items-center space-x-2 text-gray-700">
     <input
       type="checkbox"
