@@ -1,59 +1,67 @@
-// app/my-appointments/components/RescheduleModal.tsx
+// src/app/doctor/appointments/components/RescheduleModal.tsx
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FaTimes, FaSpinner } from 'react-icons/fa';
-import { Appointment } from '@/types';
+import { PatientAppointment, DoctorProfile } from '@/types'; // Import DoctorProfile
+import { mockDoctorProfiles } from '@/lib/doctorData'; // Import mockDoctorProfiles
 
 interface RescheduleModalProps {
-  appointment: Appointment;
+  appointment: PatientAppointment;
   onClose: () => void;
   onConfirm: (newDate: string, newTime: string) => void;
 }
 
-const RescheduleModal: React.FC<RescheduleModalProps> = ({ appointment, onClose, onConfirm }) => {
+const DoctorRescheduleModal: React.FC<RescheduleModalProps> = ({ appointment, onClose, onConfirm }) => {
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [loadingSlots, setLoadingSlots] = useState<boolean>(false);
   const [availableSlots, setAvailableSlots] = useState<{ time: string; available: boolean }[]>([]);
   const [error, setError] = useState<string>('');
+  const [currentDoctor, setCurrentDoctor] = useState<DoctorProfile | null>(null);
 
   useEffect(() => {
+    // Find the doctor associated with the current appointment
+    const doctor = mockDoctorProfiles.find(d => d.id === appointment.doctorId);
+    if (doctor) {
+      setCurrentDoctor(doctor);
+    } else {
+      setError("Doctor not found for this appointment.");
+    }
     // Pre-fill with current appointment date/time for convenience
     setSelectedDate(appointment.date);
     setSelectedTime(appointment.time);
   }, [appointment]);
 
-  // Simulate fetching available slots for a doctor.
-  // In a real app, this would be an API call based on doctor ID and consultation type.
-  const fetchAvailableSlots = async (date: string) => {
+  const fetchAvailableSlotsForDoctor = async (date: string, doctorId: string, type: 'online' | 'clinic') => {
     setLoadingSlots(true);
     setError('');
     // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500)); 
+    await new Promise(resolve => setTimeout(resolve, 500));
 
-    // This data would typically come from a backend or a comprehensive mock data
-    // that includes available slots per doctor for future dates.
-    // For now, we'll create some dummy slots based on the current date.
-    const today = new Date();
-    // const selectedDateTime = new Date(date); // Removed: selectedDateTime was assigned but never used
-    const dummySlots = [];
-    for (let i = 9; i <= 17; i++) { // From 9 AM to 5 PM
-      const time = `${i < 10 ? '0' : ''}${i}:00`;
-      const slotDateTime = new Date(`${date}T${time}:00`);
-      // Only show slots in the future
-      if (slotDateTime > today) {
-        dummySlots.push({ time, available: Math.random() > 0.2 }); // 80% chance of being available
-      }
+    const doctor = mockDoctorProfiles.find(d => d.id === doctorId);
+    if (!doctor) {
+      setError("Doctor data not available for fetching slots.");
+      setLoadingSlots(false);
+      return;
     }
-    setAvailableSlots(dummySlots);
+
+    const slotsForDate = doctor.availableSlots[type]?.[date] || [];
+    const now = new Date();
+    const filteredSlots = slotsForDate.filter(slot => {
+      const slotDateTime = new Date(`${date}T${slot.time}:00`);
+      return slot.available && slotDateTime > now;
+    });
+
+    setAvailableSlots(filteredSlots);
     setLoadingSlots(false);
   };
 
   useEffect(() => {
-    if (selectedDate) {
-      fetchAvailableSlots(selectedDate);
+    if (selectedDate && currentDoctor && appointment.type) {
+      const consultationType = appointment.type === 'Online Consultation' ? 'online' : 'clinic';
+      fetchAvailableSlotsForDoctor(selectedDate, currentDoctor.id, consultationType);
     }
-  }, [selectedDate]);
+  }, [selectedDate, currentDoctor, appointment.type]);
 
   const handleRescheduleConfirm = () => {
     if (!selectedDate || !selectedTime) {
@@ -190,4 +198,4 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({ appointment, onClose,
   );
 };
 
-export default RescheduleModal;
+export default DoctorRescheduleModal;

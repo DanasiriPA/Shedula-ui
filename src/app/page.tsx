@@ -1,11 +1,15 @@
+// ./src/app/page.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Toaster, toast } from "react-hot-toast";
+import { FaUser, FaLock, FaGoogle, FaEye, FaEyeSlash } from "react-icons/fa";
 
 const schema = yup.object().shape({
   email: yup.string().email().required("Email is required"),
@@ -44,28 +48,80 @@ export default function LoginPage() {
 
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [fadeIn, setFadeIn] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const [loginType, setLoginType] = useState<"patient" | "doctor">("patient");
+  const [typedText, setTypedText] = useState("");
   const router = useRouter();
+  const descriptionRef = useRef<HTMLDivElement>(null);
+
+  const description =
+    "Your one-stop solution for finding the right doctor. We connect patients with healthcare professionals. Schedule appointments and manage your health easily. Join us today and take control of your health journey!";
+
+  const onSubmit = async (data: FormData) => {
+    try {
+      const res = await fetch(
+        "https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin"
+      );
+      const users: APIUser[] = await res.json();
+
+      const match = users.find(
+        (u) => u.patientemail === data.email && u.patientpassword === data.password
+      );
+
+      if (match) {
+        if (rememberMe) {
+          const remembered = JSON.parse(
+            localStorage.getItem("rememberedUsers") || "[]"
+          ) as RememberedUser[];
+          const filtered = remembered.filter((u) => u.email !== data.email);
+          filtered.push({ email: data.email, password: data.password });
+          localStorage.setItem("rememberedUsers", JSON.stringify(filtered));
+        } else {
+          localStorage.removeItem("rememberedUsers");
+        }
+
+        toast.success("Logged in ✅");
+        router.push("/dashboard");
+      } else {
+        setErrorMsg("Invalid email or password ❌");
+      }
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Login failed. Try again.");
+    }
+  };
 
   useEffect(() => {
-    setFadeIn(true);
     setValue("email", "");
     setValue("password", "");
 
     const link = document.createElement("link");
-    link.href = "https://fonts.googleapis.com/css2?family=Pacifico&display=swap";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Pacifico&family=Poppins:wght@300;400;500;600&display=swap";
     link.rel = "stylesheet";
     document.head.appendChild(link);
-  }, [setValue, loginType]);
+
+    let i = 0;
+    const typingInterval = setInterval(() => {
+      if (i < description.length) {
+        setTypedText(description.substring(0, i + 1));
+        i++;
+      } else {
+        clearInterval(typingInterval);
+      }
+    }, 30);
+
+    return () => clearInterval(typingInterval);
+  }, [setValue]);
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
     setValue("email", input);
 
-    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
+    const remembered = JSON.parse(
+      localStorage.getItem("rememberedUsers") || "[]"
+    ) as RememberedUser[];
     const matchedEmails = remembered
       .filter((user) => user.email.startsWith(input))
       .map((user) => user.email);
@@ -84,7 +140,9 @@ export default function LoginPage() {
 
   const handleSuggestionClick = (email: string) => {
     setValue("email", email);
-    const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
+    const remembered = JSON.parse(
+      localStorage.getItem("rememberedUsers") || "[]"
+    ) as RememberedUser[];
     const match = remembered.find((user) => user.email === email);
     if (match) {
       setValue("password", match.password);
@@ -93,215 +151,278 @@ export default function LoginPage() {
     setEmailSuggestions([]);
   };
 
-  const onSubmit = async (data: FormData) => {
-    try {
-      const res = await fetch("https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin");
-      const users: APIUser[] = await res.json();
-
-      const match = users.find(
-        (u) => u.patientemail === data.email && u.patientpassword === data.password
-      );
-
-      if (match) {
-        if (rememberMe) {
-          const remembered = JSON.parse(localStorage.getItem("rememberedUsers") || "[]") as RememberedUser[];
-          const filtered = remembered.filter((u) => u.email !== data.email);
-          filtered.push({ email: data.email, password: data.password });
-          localStorage.setItem("rememberedUsers", JSON.stringify(filtered));
-        } else {
-          localStorage.removeItem("rememberedUsers");
-        }
-
-        alert("Logged in ✅");
-        router.push("/dashboard");
-      } else {
-        setErrorMsg("Invalid email or password ❌");
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMsg("Login failed. Try again.");
-    }
-  };
-
   const handleDoctorLogin = () => {
     router.push("/doctor/login");
   };
 
+  const bubbles = [
+    { size: 120, left: "5%", duration: 4, delay: 0 },
+    { size: 80, left: "20%", duration: 5, delay: 2 },
+    { size: 150, left: "35%", duration: 6, delay: 1 },
+    { size: 100, left: "50%", duration: 4.5, delay: 3 },
+    { size: 70, left: "65%", duration: 5.5, delay: 4 },
+    { size: 90, left: "80%", duration: 4.2, delay: 5 },
+    { size: 110, left: "95%", duration: 4.8, delay: 1.5 },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-200 flex items-center justify-center px-4">
-      <div
-        className={`w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 transition-opacity duration-700 ${
-          fadeIn ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        {/* Logo, App Name, and Quote */}
-        <div className="flex flex-col items-center mb-6">
-          <Image
-            src="https://i.postimg.cc/SKnMMNcw/360-F-863843181-63-Nv8tgy-BU8-X26-B1-Lq-Qvfi0tn95aj-Sg-X.jpg"
-            alt="Shedula Logo"
-            width={80}
-            height={80}
-            unoptimized
-            className="rounded-full"
+    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      <div className="absolute inset-0 overflow-hidden z-0">
+        {bubbles.map((bubble, i) => (
+          <motion.div
+            key={`bubble-${i}`}
+            className="absolute rounded-full bg-white opacity-100" // Opacity changed to 100
+            style={{
+              width: `${bubble.size}px`,
+              height: `${bubble.size}px`,
+              left: `${bubble.left}`,
+            }}
+            initial={{ y: "100%", opacity: 1, scale: 0.5 }} // Initial opacity changed to 1
+            animate={{
+              y: "-150%",
+              opacity: [1, 0], // Animation opacity starts at 1
+              scale: [0.5, 1.5],
+            }}
+            transition={{
+              duration: bubble.duration,
+              delay: bubble.delay,
+              repeat: Infinity,
+              ease: "linear",
+            }}
           />
-          <h1
-            className="text-5xl text-blue-700 mt-3"
-            style={{ fontFamily: "'Pacifico', cursive" }}
-          >
-            Shedula
-          </h1>
-          <p className="text-sm text-gray-600 italic mt-2 text-center">
-            Find the right doctor for your needs&nbsp;&mdash;&nbsp;we&apos;re here to help.
-          </p>
-        </div>
+        ))}
+      </div>
 
-        {/* Login Type Buttons */}
-        <div className="flex gap-4 mt-4 w-full">
-          <button
-            className={`flex-1 py-2 rounded-full font-semibold transition-transform hover:scale-105 ${
-              loginType === "patient"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-blue-700 border border-blue-200"
-            }`}
-            onClick={() => setLoginType("patient")}
-          >
-            Patient Login
-          </button>
-          <button
-            className={`flex-1 py-2 rounded-full font-semibold transition-transform hover:scale-105 ${
-              loginType === "doctor"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-100 text-blue-700 border border-blue-200"
-            }`}
-            onClick={handleDoctorLogin}
-          >
-            Doctor Login
-          </button>
-        </div>
-
-        <div className="w-full mt-3 text-center">
-          <span className="text-base text-blue-700 font-medium">
-            Hi, login to your {loginType} account
-          </span>
-        </div>
-
-        {/* Login Form */}
-        {loginType === "patient" && (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 relative mt-4">
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                onChange={handleEmailChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-400"
-                value={getValues("email")}
-              />
-              {emailSuggestions.length > 0 && (
-                <div className="absolute bg-white border border-gray-300 rounded-md mt-1 z-10 w-full max-h-28 overflow-y-auto">
-                  {emailSuggestions.map((email) => (
-                    <div
-                      key={email}
-                      className="px-4 py-1 hover:bg-gray-100 cursor-pointer text-sm"
-                      onClick={() => handleSuggestionClick(email)}
-                    >
-                      {email}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {errors.email && (
-                <p className="text-sm text-red-500 mt-1">{errors.email.message}</p>
-              )}
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  {...register("password")}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-black focus:outline-none focus:ring-2 focus:ring-blue-400"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2 text-sm text-black"
-                >
-                  {showPassword ? "Hide" : "Show"}
-                </button>
-              </div>
-              {errors.password && (
-                <p className="text-sm text-red-500 mt-1">{errors.password.message}</p>
-              )}
-            </div>
-
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between text-sm text-black">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                  className="form-checkbox text-blue-600"
-                />
-                Remember me
-              </label>
-              <a href="/forgot-password" className="text-blue-600 hover:underline">
-                Forgot password?
-              </a>
-            </div>
-
-            {/* Error Message */}
-            {errorMsg && (
-              <p className="text-red-500 text-center text-sm">{errorMsg}</p>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-full hover:bg-blue-600 transition"
+      <Toaster position="top-center" />
+      <div className="flex flex-col md:flex-row w-full max-w-6xl mx-auto relative z-10 px-4">
+        <div className="flex-col justify-center items-center p-8 w-full md:w-1/2 mb-8 md:mb-0">
+          <div className="mb-8 text-center">
+            <Image
+              src="https://i.postimg.cc/SKnMMNcw/360-F-863843181-63-Nv8tgy-BU8-X26-B1-Lq-Qvfi0tn95aj-Sg-X.jpg"
+              alt="Shedula Logo"
+              width={120}
+              height={120}
+              unoptimized
+              className="rounded-full mx-auto"
+            />
+            <h1
+              className="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-700 mt-4"
+              style={{ fontFamily: "'Pacifico', cursive" }}
             >
-              Login
-            </button>
-
-            {/* Divider */}
-            <div className="flex items-center my-4">
-              <hr className="flex-grow border-gray-300" />
-              <span className="mx-2 text-sm text-black">or</span>
-              <hr className="flex-grow border-gray-300" />
-            </div>
-
-            {/* Google Login Button */}
-            <button
-              type="button"
-              onClick={() => {
-                setValue("email", "googleuser@gmail.com");
-                setValue("password", "google123");
-                setShowPassword(true);
-              }}
-              className="w-full flex items-center justify-center gap-2 border border-gray-300 py-2 rounded-full hover:bg-gray-100 transition"
-            >
-              <Image
-                src="https://www.svgrepo.com/show/475656/google-color.svg"
-                alt="Google"
-                width={20}
-                height={20}
-                unoptimized
-              />
-              <span className="text-black font-medium">Continue with Google</span>
-            </button>
-
-            {/* Signup Link */}
-            <p className="text-sm text-center mt-4 text-black">
-              Don&apos;t have an account?{" "}
-              <a href="/signup" className="text-blue-600 hover:underline">
-                Sign up
-              </a>
+              Shedula
+            </h1>
+          </div>
+          <div
+            ref={descriptionRef}
+            className="text-gray-800 max-w-md text-center mx-auto"
+            style={{ fontFamily: "'Poppins', sans-serif" }}
+          >
+            <p className="text-base font-normal h-40 overflow-hidden leading-relaxed">
+              {typedText}
+              <span className="animate-pulse">|</span>
             </p>
-          </form>
-        )}
+          </div>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6 }}
+          className="w-full md:w-1/2 p-8 md:p-10"
+        >
+          <div className="space-y-6">
+            <div className="flex gap-4">
+              <button
+                type="button"
+                className={`flex-1 py-3 rounded-full font-semibold transition-all ${
+                  loginType === "patient"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "bg-gray-100 text-blue-600 border border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={() => setLoginType("patient")}
+              >
+                Patient Login
+              </button>
+              <button
+                type="button"
+                className={`flex-1 py-3 rounded-full font-semibold transition-all ${
+                  loginType === "doctor"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "bg-gray-100 text-blue-600 border border-gray-200 hover:bg-gray-50"
+                }`}
+                onClick={handleDoctorLogin}
+              >
+                Doctor Login
+              </button>
+            </div>
+
+            <div className="w-full text-center">
+              <h2 className="text-xl font-semibold text-gray-800">
+                Hi, login to your {loginType} account
+              </h2>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <div className="relative flex items-center border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                  <FaUser className="text-gray-400 ml-3" />
+                  <input
+                    type="email"
+                    onChange={handleEmailChange}
+                    className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800"
+                    value={getValues("email")}
+                    placeholder="Enter your email"
+                  />
+                </div>
+                {emailSuggestions.length > 0 && (
+                  <div className="absolute bg-white border border-gray-300 rounded-md mt-1 z-10 w-full max-h-28 overflow-y-auto shadow-lg">
+                    {emailSuggestions.map((email) => (
+                      <div
+                        key={email}
+                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm text-gray-800"
+                        onClick={() => handleSuggestionClick(email)}
+                      >
+                        {email}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {errors.email && (
+                  <p className="text-sm text-red-500 mt-2">
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <div className="flex items-center border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                  <FaLock className="text-gray-400 ml-3" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    {...register("password")}
+                    className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800 pr-12"
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 text-gray-500 hover:text-gray-700"
+                  >
+                    {showPassword ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-red-500 mt-2">
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between text-sm">
+                <label className="flex items-center gap-2 text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="form-checkbox h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  Remember me
+                </label>
+                <a
+                  href="/forgot-password"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Forgot password?
+                </a>
+              </div>
+
+              {errorMsg && (
+                <p className="text-red-500 text-center text-sm py-2">
+                  {errorMsg}
+                </p>
+              )}
+
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg transition-all shadow-md font-medium"
+              >
+                Login
+              </motion.button>
+
+              <div className="flex items-center my-5">
+                <hr className="flex-grow border-gray-300" />
+                <span className="mx-3 text-sm text-gray-500">or</span>
+                <hr className="flex-grow border-gray-300" />
+              </div>
+
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => {
+                  setValue("email", "googleuser@gmail.com");
+                  setValue("password", "google123");
+                  setShowPassword(true);
+                }}
+                className="w-full flex items-center justify-center gap-3 border border-gray-300 py-3 rounded-lg bg-white transition-all shadow-sm font-medium"
+              >
+                <FaGoogle className="text-red-500" />
+                <span className="text-gray-700">Continue with Google</span>
+              </motion.button>
+
+              <p className="text-sm text-center mt-5 text-gray-600">
+                Don&apos;t have an account?{" "} {/* Corrected apostrophe here */}
+                <a
+                  href="/signup"
+                  className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                >
+                  Sign up
+                </a>
+              </p>
+            </form>
+          </div>
+
+          <div className="mt-8 p-6 bg-white bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200">
+            <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+              Login Credentials
+            </h3>
+            <p className="text-sm text-gray-600 text-center">
+              Use these credentials to access the different accounts.
+            </p>
+            <div className="space-y-4 mt-6">
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h4 className="font-semibold text-blue-700 flex items-center">
+                  <span className="mr-2">👨‍⚕️</span> Doctor Account
+                </h4>
+                <p className="text-blue-600 ml-6 text-sm mt-1">
+                  ID: `dr123`
+                </p>
+                <p className="text-blue-600 ml-6 text-sm">
+                  Password: `password123`
+                </p>
+              </div>
+              <div className="p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <h4 className="font-semibold text-purple-700 flex items-center">
+                  <span className="mr-2">🏥</span> Patient Account
+                </h4>
+                <p className="text-purple-600 ml-6 text-sm mt-1">
+                  Email: `googleuser@gmail.com`
+                </p>
+                <p className="text-purple-600 ml-6 text-sm">
+                  Password: `google123`
+                </p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

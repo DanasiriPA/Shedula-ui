@@ -1,79 +1,47 @@
-"use client";
+// app/my-appointments/components/AppointmentDetails.tsx
+import Image from 'next/image';
+import { FaCalendarAlt, FaClock, FaStethoscope, FaNotesMedical, FaUserCircle, FaCreditCard, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { Appointment } from '@/types';
 
-import Image from "next/image";
-import { Appointment } from "@/types/appointment";
-
-type Props = {
+interface AppointmentDetailsProps {
   appointment: Appointment;
-  onCancel?: (appt: Appointment) => void;
-  onReschedule?: (appt: Appointment) => void;
-};
+}
 
-export default function AppointmentDetails({
-  appointment,
-  onCancel,
-  onReschedule,
-}: Props) {
-  const { status } = appointment;
-
-  const getStatusBadge = () => {
-    switch (status) {
-      case "cancelled":
-        return <p className="text-sm font-semibold text-red-600 mt-1">🔴 Cancelled</p>;
-      case "visited":
-        return <p className="text-sm font-semibold text-green-600 mt-1">✅ Visited</p>;
-      case "upcoming":
-      default:
-        return <p className="text-sm font-semibold text-green-600 mt-1">🟢 Upcoming</p>;
-    }
-  };
-
+const AppointmentDetails: React.FC<AppointmentDetailsProps> = ({ appointment }) => {
   return (
-    <div className="bg-white shadow-md p-4 rounded-xl mb-4">
-      <div className="flex gap-4 items-center">
-        <Image
-          src={appointment.avatar}
-          alt={appointment.doctorName}
-          width={60}
-          height={60}
-          className="rounded-full object-cover"
+    <div className="flex flex-col items-center lg:items-start text-center lg:text-left p-4">
+      <div className="relative w-40 h-40 mb-6 rounded-full border-4 border-blue-300 shadow-lg overflow-hidden">
+        <Image 
+          src={appointment.doctorAvatar} 
+          alt={appointment.doctorName} 
+          layout="fill" 
+          objectFit="contain"
+          className="rounded-full"
         />
-        <div className="text-gray-900">
-          <h2 className="text-lg font-bold">{appointment.doctorName}</h2>
-          <p className="text-sm">{appointment.specialization}</p>
-          <p className="text-sm">
-            <strong>Date:</strong> {appointment.date}
-          </p>
-          <p className="text-sm">
-            <strong>Time:</strong> {appointment.time}
-          </p>
-          <p className="text-sm">
-            <strong>Token:</strong> {appointment.token}
-          </p>
-          {getStatusBadge()}
-        </div>
       </div>
-
-      {status === "upcoming" && (
-        <div className="mt-4 flex gap-3">
-          {onReschedule && (
-            <button
-              onClick={() => onReschedule(appointment)}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
-            >
-              Reschedule
-            </button>
-          )}
-          {onCancel && (
-            <button
-              onClick={() => onCancel(appointment)}
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-            >
-              Cancel
-            </button>
-          )}
-        </div>
-      )}
+      <h2 className="text-4xl font-bold text-gray-900 mb-2">{appointment.doctorName}</h2>
+      <p className="text-xl text-blue-600 font-semibold mb-2">{appointment.doctorSpecialization}</p>
+      
+      <div className="flex flex-col gap-3 text-lg text-gray-700 w-full lg:w-auto mt-4">
+        <p className="flex items-center gap-3"><FaCalendarAlt className="text-blue-600" /> Date: {new Date(appointment.date).toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p className="flex items-center gap-3"><FaClock className="text-blue-600" /> Time: {appointment.time}</p>
+        <p className="flex items-center gap-3"><FaStethoscope className="text-blue-600" /> Type: {appointment.type}</p>
+        <p className="flex items-center gap-3"><FaNotesMedical className="text-purple-600" /> Token: <span className="font-bold">{appointment.token}</span></p>
+        <p className="flex items-center gap-3"><FaUserCircle className="text-blue-600" /> Patient: {appointment.patientName} ({appointment.patientAge} yrs)</p>
+        <p className="flex items-center gap-3"><FaCreditCard className="text-blue-600" /> Payment: {appointment.paymentMethod === 'online' ? 'Online Paid' : 'Cash on Visit'}</p>
+        <p className={`font-semibold text-lg flex items-center gap-2 ${
+          appointment.status === 'upcoming' ? "text-green-600" :
+          appointment.status === 'cancelled' ? "text-red-600" :
+          "text-gray-600"
+        }`}>
+          Status: {appointment.status === 'upcoming' && <FaCheckCircle />}
+          {appointment.status === 'cancelled' && <FaTimesCircle />}
+          {appointment.status === 'completed' && <FaCheckCircle />}
+          {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+        </p>
+      </div>
     </div>
   );
-}
+};
+
+export default AppointmentDetails;

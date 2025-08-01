@@ -3,8 +3,11 @@
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Toaster, toast } from "react-hot-toast";
+import { FaEnvelope, FaKey, FaArrowLeft } from "react-icons/fa";
 
 // ✅ Validation schemas
 const emailSchema = yup.object().shape({
@@ -26,8 +29,8 @@ type CodeFormData = {
 
 type User = {
   id: string;
-  email: string;
-  password: string;
+  patientemail: string; // Corrected field name
+  patientpassword: string; // Corrected field name
   // Add other fields if needed
 };
 
@@ -54,25 +57,37 @@ export default function ForgotPasswordPage() {
     resolver: yupResolver(codeSchema),
   });
 
+  useEffect(() => {
+    // Load fonts for consistency
+    const link = document.createElement("link");
+    link.href = "https://fonts.googleapis.com/css2?family=Pacifico&family=Poppins:wght@300;400;500;600&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+  }, []);
+
   const handleEmail = async (data: EmailFormData) => {
     try {
-      const res = await fetch("http://localhost:4000/users");
+      // Use your mockapi.io endpoint here
+      const res = await fetch("https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin");
       const users: User[] = await res.json();
 
-      const user = users.find((u) => u.email === data.email);
+      // ✅ Corrected: Finding the user by `patientemail`
+      const user = users.find((u) => u.patientemail === data.email);
 
       if (!user) {
-        setErrorMsg("❌ Email not registered");
+        setErrorMsg("");
+        toast.error("❌ Email not registered");
       } else {
         const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
         setCode(randomCode);
         setEmail(data.email);
         setEmailSent(true);
-        alert(`Your 4-digit code: ${randomCode}`);
+        toast.success(`Your 4-digit code: ${randomCode}`);
         setErrorMsg("");
       }
     } catch {
-      setErrorMsg("Something went wrong!");
+      setErrorMsg("");
+      toast.error("Something went wrong!");
     }
   };
 
@@ -80,65 +95,141 @@ export default function ForgotPasswordPage() {
     if (data.code === code) {
       localStorage.setItem("rememberMe", "true");
       localStorage.setItem("email", email);
-      localStorage.setItem("password", "google123"); // or a dummy value
-      alert("✅ Verified! Logging in...");
+      localStorage.setItem("password", "google123");
+      toast.success("✅ Verified! Logging in...");
       router.push("/dashboard");
     } else {
-      setErrorMsg("❌ Incorrect code");
+      setErrorMsg("");
+      toast.error("❌ Incorrect code");
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-100 to-purple-200 px-4">
-      <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
-        <h2 className="text-2xl font-bold text-center text-blue-600 mb-6">
-          Forgot Password
-        </h2>
+  // Floating bubbles for background
+  const bubbles = [
+    { size: 120, left: "5%", duration: 15, delay: 0 },
+    { size: 80, left: "20%", duration: 20, delay: 2 },
+    { size: 150, left: "35%", duration: 25, delay: 1 },
+    { size: 100, left: "50%", duration: 18, delay: 3 },
+    { size: 70, left: "65%", duration: 22, delay: 4 },
+    { size: 90, left: "80%", duration: 17, delay: 5 },
+    { size: 110, left: "95%", duration: 19, delay: 1.5 },
+  ];
 
-        {!emailSent ? (
-          <form onSubmit={handleEmailSubmit(handleEmail)} className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Enter your registered email
-            </label>
-            <input
-              type="email"
-              {...registerEmail("email")}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-400"
-            />
-            {emailErrors.email && (
-              <p className="text-red-500 text-sm">{emailErrors.email.message}</p>
-            )}
-            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
-            >
-              Send Code
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={handleCodeSubmit(handleCode)} className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Enter the 4-digit code sent to <b>{email}</b>
-            </label>
-            <input
-              type="text"
-              {...registerCode("code")}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg text-black focus:ring-2 focus:ring-blue-400"
-            />
-            {codeErrors.code && (
-              <p className="text-red-500 text-sm">{codeErrors.code.message}</p>
-            )}
-            {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
-            <button
-              type="submit"
-              className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 transition"
-            >
-              Verify Code
-            </button>
-          </form>
-        )}
+  return (
+    <div className="min-h-screen w-full flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-50 via-purple-100 to-pink-50">
+      <div className="absolute inset-0 overflow-hidden z-0">
+        {bubbles.map((bubble, i) => (
+          <motion.div
+            key={`bubble-${i}`}
+            className="absolute rounded-full bg-white"
+            style={{
+              width: `${bubble.size}px`,
+              height: `${bubble.size}px`,
+              left: `${bubble.left}`,
+            }}
+            initial={{ y: "100%", opacity: 0.2, scale: 0.2 }}
+            animate={{
+              y: "-150%",
+              opacity: [0.2, 0.6, 0.2],
+              scale: [0.2, 1.2, 1.2],
+            }}
+            transition={{
+              duration: bubble.duration,
+              delay: bubble.delay,
+              repeat: Infinity,
+              ease: "linear",
+            }}
+          />
+        ))}
       </div>
+
+      <Toaster position="top-center" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6 }}
+        className="w-full max-w-md p-8 md:p-10 relative z-10"
+      >
+        <div className="space-y-6">
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => router.push("/")}
+            className="w-full flex items-center justify-center gap-3 border border-gray-300 py-3 rounded-lg bg-white transition-all shadow-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <FaArrowLeft className="text-blue-600" />
+            <span>Back to Login</span>
+          </motion.button>
+
+          <div className="w-full text-center">
+            <h2 className="text-xl font-semibold text-gray-800">
+              Forgot Password
+            </h2>
+          </div>
+
+          {!emailSent ? (
+            <form onSubmit={handleEmailSubmit(handleEmail)} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Enter your registered email
+                </label>
+                <div className="flex items-center border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                  <FaEnvelope className="text-gray-400 ml-3" />
+                  <input
+                    type="email"
+                    {...registerEmail("email")}
+                    className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800"
+                    placeholder="your-email@example.com"
+                  />
+                </div>
+                {emailErrors.email && (
+                  <p className="text-red-500 text-sm mt-2">{emailErrors.email.message}</p>
+                )}
+              </div>
+              {errorMsg && <p className="text-red-500 text-sm text-center py-2">{errorMsg}</p>}
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg transition-all shadow-md font-medium"
+              >
+                Send Code
+              </motion.button>
+            </form>
+          ) : (
+            <form onSubmit={handleCodeSubmit(handleCode)} className="space-y-5">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Enter the 4-digit code sent to{" "}
+                  <b className="text-blue-600">{email}</b>
+                </label>
+                <div className="flex items-center border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+                  <FaKey className="text-gray-400 ml-3" />
+                  <input
+                    type="text"
+                    {...registerCode("code")}
+                    className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800"
+                    placeholder="e.g., 1234"
+                  />
+                </div>
+                {codeErrors.code && (
+                  <p className="text-red-500 text-sm mt-2">{codeErrors.code.message}</p>
+                )}
+              </div>
+              {errorMsg && <p className="text-red-500 text-sm text-center py-2">{errorMsg}</p>}
+              <motion.button
+                type="submit"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-all shadow-md font-medium"
+              >
+                Verify Code
+              </motion.button>
+            </form>
+          )}
+        </div>
+      </motion.div>
     </div>
   );
 }
