@@ -34,6 +34,7 @@ const AppointmentDetails: React.FC<AppointmentDetailsProps> = ({ appointment }) 
   appointment.status === 'Accepted' ? "text-green-600" :
   appointment.status === 'Rescheduled' ? "text-blue-600" :
   appointment.status === 'Cancelled' ? "text-red-600" :
+  appointment.status === 'Completed' ? "text-green-600" :
   "text-gray-600"
 }`}>
   Status: {(appointment.status === 'Accepted' || appointment.status === 'Completed') && <FaCheckCircle />}

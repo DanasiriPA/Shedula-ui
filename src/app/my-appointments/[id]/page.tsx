@@ -29,6 +29,7 @@ export default function DoctorDetailPage() {
   const [bookingError, setBookingError] = useState<string>('');
   const [isBooking, setIsBooking] = useState(false);
   const [loading, setLoading] = useState(true);
+  
 
   useEffect(() => {
     const fetchDoctor = async () => {
@@ -57,6 +58,7 @@ export default function DoctorDetailPage() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleBooking = async () => {
     setBookingError('');
     setIsBooking(true);
