@@ -30,15 +30,16 @@ const AppointmentDetails: React.FC<AppointmentDetailsProps> = ({ appointment }) 
         <p className="flex items-center gap-3"><FaUserCircle className="text-blue-600" /> Patient: {appointment.patientName} ({appointment.patientAge} yrs)</p>
         <p className="flex items-center gap-3"><FaCreditCard className="text-blue-600" /> Payment: {appointment.paymentMethod === 'online' ? 'Online Paid' : 'Cash on Visit'}</p>
         <p className={`font-semibold text-lg flex items-center gap-2 ${
-          appointment.status === 'upcoming' ? "text-green-600" :
-          appointment.status === 'cancelled' ? "text-red-600" :
-          "text-gray-600"
-        }`}>
-          Status: {appointment.status === 'upcoming' && <FaCheckCircle />}
-          {appointment.status === 'cancelled' && <FaTimesCircle />}
-          {appointment.status === 'completed' && <FaCheckCircle />}
-          {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
-        </p>
+  appointment.status === 'Pending' ? "text-yellow-600" :
+  appointment.status === 'Accepted' ? "text-green-600" :
+  appointment.status === 'Rescheduled' ? "text-blue-600" :
+  appointment.status === 'Cancelled' ? "text-red-600" :
+  "text-gray-600"
+}`}>
+  Status: {(appointment.status === 'Accepted' || appointment.status === 'Completed') && <FaCheckCircle />}
+  {appointment.status === 'Cancelled' && <FaTimesCircle />}
+  {appointment.status}
+</p>
       </div>
     </div>
   );
