@@ -51,7 +51,7 @@ const DoctorUpdateModal: React.FC<UpdateModalProps> = ({ appointment, onClose, o
 
         <div className="space-y-6">
           <div>
-            <label htmlFor="doctorNotes" className="block text-purple-800 text-lg font-semibold mb-2">Doctor's Notes</label>
+            <label htmlFor="doctorNotes" className="block text-purple-800 text-lg font-semibold mb-2">Doctor&#39;s Notes</label>
             <textarea
               id="doctorNotes"
               className="w-full p-3 rounded-lg border-2 border-gray-300 focus:ring-purple-500 focus:border-purple-500 text-black h-32 resize-none"

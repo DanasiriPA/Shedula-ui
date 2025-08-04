@@ -30,7 +30,6 @@ interface EmergencySummary {
   emergencyContact: string;
 }
 
-// MedicalHistoryItem will now essentially just hold a single string note
 interface MedicalHistoryItem {
   id: number;
   department: string;
@@ -38,16 +37,14 @@ interface MedicalHistoryItem {
   notes: string;
 }
 
-// Vitals interface updated to include 'temperature' and reflects flat structure
 interface Vitals {
   bloodPressure: string;
   heartRate: string;
   glucose: string;
   weight: string;
-  temperature: string; // Added temperature
+  temperature: string;
 }
 
-// Prescription will now essentially just hold a single string for medicine
 interface Prescription {
   id: number;
   medicine: string;
@@ -57,14 +54,12 @@ interface Prescription {
   date: string;
 }
 
-// DoctorNote will now essentially just hold a single string note
 interface DoctorNote {
   id: number;
   doctor: string;
   note: string;
 }
 
-// HealthGoal will now essentially just hold a single string goal
 interface HealthGoal {
   id: number;
   goal: string;
@@ -83,7 +78,6 @@ export default function RecordsPage() {
   const [goals, setGoals] = useState<HealthGoal[]>([]);
 
   useEffect(() => {
-    // This line adds the Google Font for 'Lobster' for consistency
     const link = document.createElement("link");
     link.href = "https://fonts.googleapis.com/css2?family=Lobster&display=swap";
     link.rel = "stylesheet";
@@ -91,75 +85,76 @@ export default function RecordsPage() {
 
     const fetchData = async () => {
       try {
-        const res = await fetch("https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin/1");
+        const res = await fetch("https://json-server-7wzo.onrender.com/medicalRecords");
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
-        const data = await res.json();
+        const result = await res.json();
+        const data = Array.isArray(result) ? result[0] : result;
 
-        // Populate state with fetched data, with fallbacks
+        // Populate state with fetched data from the new API
         setEmergency({
           allergies: data.allergies || "None known",
           medications: data.currentMedications || "None",
           conditions: data.chronicConditions || "None",
-          emergencyContact: `${data.emergencyContactName || "N/A"} (${data.emergencyContactRelation || "N/A"}) - ${data.emergencyContactPhone || "N/A"}`,
+          emergencyContact: data.emergencyContact || "N/A",
         });
 
-        // --- Adjustments for Simplified Data from MockAPI ---
-
-        // Medical History (now a single string in MockAPI, so we make it a single-item array)
+        // Medical History
         setHistory([
-          {
-            id: 1,
-            department: "Summary", // Categorize as summary since it's one string
-            date: data.lastUpdated ? new Date(data.lastUpdated).toLocaleDateString() : "N/A", // Use lastUpdated for date
-            notes: data.medicalHistory || "No medical history recorded."
-          }
-        ]);
+        {
+          id: 1,
+          department: "General",
+          date: data.lastUpdated || "N/A",
+          notes: data.medicalHistory || "No medical history recorded",
+        },
+      ]);
 
-        // Vitals (now flattened in MockAPI, directly at top level)
+        // Vitals
         setVitals({
           bloodPressure: data.bloodPressure || "N/A",
           heartRate: data.heartRate || "N/A",
           glucose: data.glucose || "N/A",
           weight: data.weight || "N/A",
-          temperature: data.temperature || "N/A" // Access directly
+          temperature: data.temperature || "N/A",
         });
 
-        // Prescriptions (now a single string in MockAPI, so we make it a single-item array)
+        // Prescriptions
         setPrescriptions([
-          {
+  {
             id: 1,
-            medicine: data.prescriptions || "No prescriptions",
-            dosage: "N/A", // Default for simplified data
-            frequency: "N/A", // Default for simplified data
-            doctor: "N/A",    // Default for simplified data
-            date: "N/A"       // Default for simplified data
-          }
+            medicine: data.prescriptions || "N/A",
+            dosage: "N/A",
+            frequency: "N/A",
+            doctor: "N/A",
+            date: data.lastUpdated || "N/A",
+          },
         ]);
 
-        // Doctor Notes (now a single string in MockAPI, so we make it a single-item array)
+        // Doctor Notes
         setDoctorNotes([
           {
             id: 1,
-            doctor: "General Notes", // Categorize as general notes
-            note: data.doctorNotes || "No doctor's notes recorded."
-          }
+            doctor: "System",
+            note: data.doctorNotes || "No doctor notes",
+          },
         ]);
 
-        // Health Goals (now a single string in MockAPI, so we make it a single-item array)
-        setGoals([
-          {
-            id: 1,
-            goal: data.healthGoals || "No health goals set."
-          }
-        ]);
-
+        // Health Goals
+        setGoals(
+        (data.healthGoals?.split("\n") || []).map((goal: string, index: number) => ({
+          id: index + 1,
+          goal,
+        }))
+      );
       } catch (error) {
         console.error("Error fetching patient data:", error);
-        // Set default/empty states on error, ensuring consistent types
+        // Set default/empty states on error
         setEmergency({
-          allergies: "N/A", medications: "N/A", conditions: "N/A", emergencyContact: "N/A (N/A) - N/A",
+          allergies: "N/A", 
+          medications: "N/A", 
+          conditions: "N/A", 
+          emergencyContact: "N/A",
         });
         setHistory([{ id: 1, department: "General", date: "N/A", notes: "Could not load medical history." }]);
         setVitals({ bloodPressure: "N/A", heartRate: "N/A", glucose: "N/A", weight: "N/A", temperature: "N/A" });
@@ -170,15 +165,18 @@ export default function RecordsPage() {
     };
 
     fetchData();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
+
+  // Function to handle POST/PATCH requests
+  
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
       setSelectedFile(e.target.files[0]);
       setShowFileUploadSuccess(true);
-      setTimeout(() => setShowFileUploadSuccess(false), 3000); // Hide message after 3 seconds
-      // In a real application, you would send this file to a server.
+      setTimeout(() => setShowFileUploadSuccess(false), 3000);
       console.log("File selected for upload:", e.target.files[0].name);
+      
     }
   };
 

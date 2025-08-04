@@ -1,16 +1,45 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    FaStar, FaBriefcaseMedical, FaMapMarkerAlt, FaCalendarAlt, FaClock, FaRupeeSign,
+    FaStar, FaBriefcaseMedical, FaMapMarkerAlt, FaCalendarAlt, FaRupeeSign,
     FaChevronLeft, FaCreditCard, FaUserCircle, FaStethoscope, FaCapsules, FaNotesMedical,
     FaTimes, FaCheckCircle, FaLaptopMedical
 } from 'react-icons/fa';
 
-import mockDoctors, { Doctor, Slot } from '@/lib/mockDoctors';
+// Import Firebase modules
+import { db, auth } from '@/lib/firebase';
+import { collection, addDoc } from "firebase/firestore";
+import { User } from 'firebase/auth';
+import { doc, getDoc } from "firebase/firestore";
+type Slot = {
+  time: string;
+  available: boolean;
+};
+
+type Doctor = {
+  id: string;
+  uid: string;
+  name: string;
+  specialization: string;
+  education?: string;
+  rating: number;
+  reviews?: number;
+  experience: number;
+  location: string;
+  onlinePrice: number;
+  clinicPrice: number;
+  available: boolean;
+  avatar: string;
+  description: string;
+  availableSlots: {
+    online: Record<string, Slot[]>;
+    clinic: Record<string, Slot[]>;
+  };
+};
 
 // Helper function to format date
 const formatDate = (dateString: string) => {
@@ -18,14 +47,34 @@ const formatDate = (dateString: string) => {
 };
 
 export default function DoctorDetailPage() {
-    const params = useParams();
     const router = useRouter();
 
-    const doctorId = useMemo(() => {
-        if (!params || !params.id) return null;
-        return Array.isArray(params.id) ? params.id[0] : params.id;
-    }, [params.id]);
+    const { id } = useParams();
 
+const doctorId = useMemo(() => {
+    if (!id) return null;
+    return Array.isArray(id) ? id[0] : id;
+}, [id]);
+    type AppointmentDetails = {
+    id?: string;
+    doctorId: string;
+    doctorName: string;
+    doctorSpecialization: string;
+    doctorAvatar: string;
+    date: string;
+    time: string;
+    type: string;
+    token: string;
+    patientName: string;
+    patientAge: string;
+    patientId: string;
+    paymentMethod: 'cash' | 'online';
+    status: string; // <-- changed from 'upcoming' to string
+    consultationFee: number;
+    location: string;
+    createdAt: string;
+    timeRemaining: string;
+    };
     const [doctor, setDoctor] = useState<Doctor | null>(null);
     const [selectedDate, setSelectedDate] = useState<string>('');
     const [selectedTime, setSelectedTime] = useState<string>('');
@@ -36,20 +85,43 @@ export default function DoctorDetailPage() {
     const [showConfirmation, setShowConfirmation] = useState(false);
     const [isBooking, setIsBooking] = useState(false);
     const [bookingError, setBookingError] = useState<string | null>(null);
-    const [appointmentDetails, setAppointmentDetails] = useState<any>(null);
+    const [appointmentDetails, setAppointmentDetails] = useState<AppointmentDetails | null>(null);
+    const [currentUser, setCurrentUser] = useState<User | null>(null);
 
     const emojiMap: Record<string, string> = {
         Gyno: "👩‍⚕️", Neuro: "🧠", Skin: "🧴", Heart: "❤️", "Child Specialist": "🧒", General: "🩺", Ortho: "🦴", Dental: "🦷", Psychiatry: "🧘", Oncology: "🎗️"
     };
 
+    // Get current user on component mount
     useEffect(() => {
-        if (doctorId) {
-            const foundDoctor = mockDoctors.find(d => d.id === doctorId);
-            setDoctor(foundDoctor || null);
-        } else {
-            setDoctor(null);
-        }
-    }, [doctorId]);
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            setCurrentUser(user);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    useEffect(() => {
+  const fetchDoctor = async () => {
+    if (!doctorId) return;
+
+    try {
+      const docRef = doc(db, "doctors", doctorId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        setDoctor({ id: docSnap.id, ...docSnap.data() } as Doctor);
+      } else {
+        console.warn("Doctor not found in Firestore");
+        setDoctor(null);
+      }
+    } catch (error) {
+      console.error("Error fetching doctor:", error);
+      setDoctor(null);
+    }
+  };
+
+  fetchDoctor();
+}, [doctorId]);
 
     const availableDates = useMemo(() => {
         if (!doctor || !consultationType) return [];
@@ -73,7 +145,7 @@ export default function DoctorDetailPage() {
         return `${randomLetter}-${randomNumber}`;
     };
 
-    const calculateTimeRemaining = (appointmentDate: string, appointmentTime: string) => {
+    const calculateTimeRemaining = useCallback((appointmentDate: string, appointmentTime: string) => {
         const [hours, minutes] = appointmentTime.split(':').map(Number);
         const appointmentDateTime = new Date(appointmentDate);
         appointmentDateTime.setHours(hours, minutes, 0, 0);
@@ -88,26 +160,35 @@ export default function DoctorDetailPage() {
         const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
         return `${diffDays}d ${diffHours}h ${diffMinutes}m remaining`;
-    };
+    }, []);
 
     const handleBooking = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsBooking(true);
         setBookingError(null);
+        console.log('Starting booking process...');
+
+        // Check for user authentication
+        if (!currentUser) {
+            setBookingError("You must be logged in to book an appointment.");
+            setIsBooking(false);
+            router.push('/login');
+            return;
+        }
 
         if (!doctor || !selectedDate || !selectedTime || !patientName || !patientAge || !consultationType || !paymentMethod) {
             setBookingError('Please fill out all required fields.');
             setIsBooking(false);
+            console.log('Validation failed - missing fields');
             return;
         }
 
         try {
             const token = generateTokenNumber();
             const consultationFee = consultationType === 'online' ? doctor.onlinePrice : doctor.clinicPrice;
-
+            const timeRemaining = calculateTimeRemaining(selectedDate, selectedTime);
             const newAppointment = {
-                id: Math.random().toString(),
-                doctorId: doctor.id,
+                doctorId: doctor.uid, // Changed from doctor.id to doctor.uid, // Doctor's ID from the URL params
                 doctorName: doctor.name,
                 doctorSpecialization: doctor.specialization,
                 doctorAvatar: doctor.avatar,
@@ -117,20 +198,34 @@ export default function DoctorDetailPage() {
                 token,
                 patientName,
                 patientAge,
+                patientId: currentUser.uid, // Current user's UID
                 paymentMethod,
                 status: 'upcoming',
                 consultationFee,
-                location: doctor.location // Adding location to the appointment details
+                location: doctor.location,
+                createdAt: new Date().toISOString(),
+                timeRemaining,
             };
 
-            if (typeof window !== 'undefined') {
-                const existingAppointmentsStr = localStorage.getItem('appointments');
-                const existingAppointments = existingAppointmentsStr ? JSON.parse(existingAppointmentsStr) : [];
-                localStorage.setItem('appointments', JSON.stringify([...existingAppointments, newAppointment]));
-            }
+            console.log('Creating appointment with data:', newAppointment);
 
-            setAppointmentDetails(newAppointment);
+            // Send data to Firebase
+            const docRef = await addDoc(collection(db, "appointments"), newAppointment);
+            console.log("Appointment booked with ID: ", docRef.id);
+
+            // Set the state for the confirmation pop-up
+            setAppointmentDetails({ ...newAppointment, id: docRef.id });
             setShowConfirmation(true);
+            console.log('Show confirmation set to true');
+
+            // Reset form fields after successful booking
+            setSelectedDate('');
+            setSelectedTime('');
+            setPatientName('');
+            setPatientAge('');
+            setConsultationType(null);
+            setPaymentMethod(null);
+
         } catch (error) {
             console.error("Booking failed:", error);
             setBookingError('An error occurred during booking. Please try again.');
@@ -146,6 +241,9 @@ export default function DoctorDetailPage() {
             </div>
         );
     }
+
+    {return (
+        <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
 
     return (
         <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
@@ -417,6 +515,7 @@ export default function DoctorDetailPage() {
                 </motion.div>
             </div>
 
+            {/* Confirmation Popup */}
             <AnimatePresence>
                 {showConfirmation && appointmentDetails && (
                     <motion.div
@@ -424,6 +523,7 @@ export default function DoctorDetailPage() {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 bg-gray-400 bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
+                        onClick={(e) => e.target === e.currentTarget && setShowConfirmation(false)}
                     >
                         <motion.div
                             initial={{ scale: 0.9, y: 50 }}
@@ -482,7 +582,7 @@ export default function DoctorDetailPage() {
                                 </div>
                                 <div className="flex justify-between items-center">
                                     <span className="font-semibold">Time Remaining:</span>
-                                    <span>{calculateTimeRemaining(appointmentDetails.date, appointmentDetails.time)}</span>
+                                    <span>{appointmentDetails.timeRemaining}</span>
                                 </div>
                             </div>
 
@@ -499,88 +599,41 @@ export default function DoctorDetailPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
-
-            <footer className="bg-gradient-to-br from-blue-900 to-purple-900 text-white py-12 px-8">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
-                    <div>
-                        <h3
-                            className="text-2xl font-bold font-lobster mb-4"
-                            style={{ fontFamily: "'Lobster', cursive" }}
-                        >
-                            Shedula
-                        </h3>
-                        <p className="text-gray-300 text-sm">
-                            Your all-in-one healthcare platform for booking appointments,
-                            consulting online, and managing health records.
-                        </p>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-semibold mb-4">Quick Links</h4>
-                        <ul className="space-y-2 text-gray-300 text-sm">
-                            <li>
-                                <a href="/doctors" className="hover:text-white transition-colors">
-                                    Find a Doctor
-                                </a>
-                            </li>
-                            <li>
-                                <a href="/my-appointments" className="hover:text-white transition-colors">
-                                    My Appointments
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Health Blog
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    About Us
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-semibold mb-4">Support</h4>
-                        <ul className="space-y-2 text-gray-300 text-sm">
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Help Center
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Contact Us
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Privacy Policy
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="hover:text-white transition-colors">
-                                    Terms of Service
-                                </a>
-                            </li>
-                        </ul>
-                    </div>
-                    <div>
-                        <h4 className="text-lg font-semibold mb-4">Contact Info</h4>
-                        <p className="text-gray-300 text-sm flex items-center gap-2 mb-2">
-                            <FaMapMarkerAlt /> 123 Health Ave, Wellness City, 10001
-                        </p>
-                        <p className="text-gray-300 text-sm flex items-center gap-2 mb-2">
-                            <FaBriefcaseMedical /> contact@shedula.com
-                        </p>
-                        <p className="text-gray-300 text-sm flex items-center gap-2 mb-2">
-                            <FaCalendarAlt /> +91 98765 43210
-                        </p>
-                    </div>
-                </div>
-                <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400 text-sm">
-                    <p>&copy; 2025 Shedula. All rights reserved.</p>
-                </div>
-            </footer>
+            <footer className="bg-gradient-to-br from-blue-900 to-purple-900 text-white py-12 px-8 mt-16">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div>
+              <h3 className="text-2xl font-bold font-lobster mb-4" style={{ fontFamily: "'Lobster', cursive" }}>Shedula</h3>
+              <p className="text-gray-300 text-sm">Your all-in-one healthcare platform for booking appointments, consulting online, and managing health records.</p>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Quick Links</h4>
+              <ul className="space-y-2 text-gray-300 text-sm">
+                <li><a href="#" className="hover:text-white transition-colors">Find a Doctor</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">My Appointments</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Health Blog</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Support</h4>
+              <ul className="space-y-2 text-gray-300 text-sm">
+                <li><a href="#" className="hover:text-white transition-colors">Help Center</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Contact Us</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Terms of Service</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="text-lg font-semibold mb-4">Contact Info</h4>
+              <p className="text-gray-300 text-sm flex items-center gap-2 mb-2"><FaMapMarkerAlt /> 123 Health Ave, Wellness City, 10001</p>
+              <p className="text-gray-300 text-sm flex items-center gap-2 mb-2"><FaBriefcaseMedical /> contact@shedula.com</p>
+              <p className="text-gray-300 text-sm flex items-center gap-2 mb-2"><FaCalendarAlt /> +91 98765 43210</p>
+            </div>
+          </div>
+          <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400 text-sm">
+            <p>&copy; 2025 Shedula. All rights reserved.</p>
+          </div>
+        </footer>
         </div>
     );
-}
+</div>); }}

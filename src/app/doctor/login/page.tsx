@@ -1,4 +1,3 @@
-// ./src/app/doctor/login/page.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -11,41 +10,35 @@ import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
 import { FaUser, FaLock, FaEye, FaEyeSlash, FaArrowLeft } from "react-icons/fa";
 
+// Import Firebase Authentication services
+import {
+  signInWithEmailAndPassword,
+  AuthError,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
+
 // Validation schema
 const schema = yup.object().shape({
-  doctorId: yup.string().required("Doctor ID is required"),
+  email: yup.string().email("Please enter a valid email").required("Email is required"),
   password: yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
 });
 
 // Form data type
 type FormData = {
-  doctorId: string;
+  email: string;
   password: string;
 };
-
-// Doctor type for fetched data - adjusted to match local mock data structure for login
-type Doctor = {
-  id: string; // This is the ID used for login
-  password: string;
-  // Other doctor details are not needed for login validation here
-};
-
-// Local mock data for doctor credentials
-const mockDoctorCredentials: Doctor[] = [
-  { id: "dr123", password: "password123" },
-  // Add more mock doctor credentials here if needed
-];
 
 export default function DoctorLogin() {
   const {
     register,
     handleSubmit,
-    setValue, // setValue is now used for pre-filling demo credentials
+    setValue,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
     defaultValues: {
-      doctorId: "",
+      email: "",
       password: "",
     },
   });
@@ -77,51 +70,53 @@ export default function DoctorLogin() {
       }
     }, 30);
 
-    // Pre-fill with demo credentials for easy testing
-    setValue("doctorId", "dr123");
-    setValue("password", "password123");
-    setRememberMe(true); // Automatically check remember me for demo
+    // Removed the pre-fill logic from here
+    // setValue("email", "dr123@hospital.com");
+    // setValue("password", "password123");
+    // setRememberMe(true);
 
     return () => clearInterval(typingInterval);
-  }, [setValue]); // Add setValue to dependency array
+  }, [setValue]);
 
   const onSubmit = async (data: FormData) => {
     setErrorMsg(""); // Clear previous errors
     try {
-      // Use local mock data for doctor credentials instead of fetching from external MockAPI
-      const doctors = mockDoctorCredentials;
-
-      // Check if a doctor with matching ID and password exists
-      const match = doctors.find(
-        (doc) =>
-          doc.id === data.doctorId && doc.password === data.password
-      );
-
-      if (match) {
-        if (rememberMe) {
-          localStorage.setItem("rememberDoctor", "true");
-          localStorage.setItem("doctorId", data.doctorId);
-          localStorage.setItem("docPassword", data.password); // Storing password is not recommended in real apps
-        } else {
-          localStorage.removeItem("rememberDoctor");
-          localStorage.removeItem("doctorId");
-          localStorage.removeItem("docPassword");
-        }
-        toast.success("Doctor logged in successfully! ✅");
-        router.push("/doctor/dashboard"); // Redirect to doctor dashboard
+      // Use Firebase's signInWithEmailAndPassword function
+      await signInWithEmailAndPassword(auth, data.email, data.password);
+      
+      // On successful login
+      if (rememberMe) {
+        localStorage.setItem("rememberDoctor", "true");
+        localStorage.setItem("docEmail", data.email);
       } else {
-        setErrorMsg("Invalid ID or password ❌");
-        toast.error("Invalid ID or password ❌");
+        localStorage.removeItem("rememberDoctor");
+        localStorage.removeItem("docEmail");
       }
-    } catch (err: unknown) { // Using 'unknown' for better type safety
-      console.error("Login error:", err);
-      if (err instanceof Error) { // Type guard to safely access error properties
-        setErrorMsg(`Login failed: ${err.message}. Please try again.`);
-        toast.error(`Login failed: ${err.message}. Please try again.`);
-      } else {
-        setErrorMsg("Login failed. An unknown error occurred. Please try again.");
-        toast.error("Login failed. An unknown error occurred. Please try again.");
+
+      toast.success("Doctor logged in successfully! ✅");
+      router.push("/doctor/dashboard"); // Redirect to doctor dashboard
+    } catch (err) {
+      const firebaseError = err as AuthError;
+      console.error(firebaseError);
+
+      let message = "An unexpected error occurred. Please try again.";
+      // Provide user-friendly error messages based on Firebase error codes
+      switch (firebaseError.code) {
+        case "auth/invalid-email":
+          message = "The email address is not valid.";
+          break;
+        case "auth/user-not-found":
+          message = "No account found with this email.";
+          break;
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          message = "Invalid email or password.";
+          break;
+        default:
+          message = "Login failed. Please check your credentials.";
+          break;
       }
+      setErrorMsg(message);
     }
   };
 
@@ -163,10 +158,9 @@ export default function DoctorLogin() {
         ))}
       </div>
 
-      <Toaster position="top-center" /> {/* Toaster component for toasts */}
+      <Toaster position="top-center" />
 
       <div className="flex flex-col md:flex-row w-full max-w-6xl mx-auto relative z-10 px-4">
-        {/* Left Section: Logo and Description */}
         <div className="flex-col justify-center items-center p-8 w-full md:w-1/2 mb-8 md:mb-0">
           <div className="mb-8 text-center">
             <Image
@@ -196,7 +190,6 @@ export default function DoctorLogin() {
           </div>
         </div>
 
-        {/* Right Section: Login Form */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -224,20 +217,20 @@ export default function DoctorLogin() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Doctor ID
+                  Email
                 </label>
                 <div className="flex items-center border border-gray-300 rounded-lg shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
                   <FaUser className="text-gray-400 ml-3" />
                   <input
-                    type="text"
-                    {...register("doctorId")}
+                    type="email"
+                    {...register("email")}
                     className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800"
-                    placeholder="Enter your Doctor ID"
+                    placeholder="Enter your Doctor Email"
                   />
                 </div>
-                {errors.doctorId && (
+                {errors.email && (
                   <p className="text-sm text-red-500 mt-2">
-                    {errors.doctorId.message}
+                    {errors.email.message}
                   </p>
                 )}
               </div>
@@ -279,10 +272,14 @@ export default function DoctorLogin() {
                   />
                   Remember me
                 </label>
-                {/* Forgot ID/Password? link removed as per previous discussions */}
+                <a
+                  href="#"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Forgot password?
+                </a>
               </div>
 
-              {/* Error message display */}
               {errorMsg && (
                 <p className="text-red-500 text-center text-sm py-2">
                   {errorMsg}
@@ -300,7 +297,6 @@ export default function DoctorLogin() {
             </form>
           </div>
 
-          {/* Demo Credentials Section */}
           <div className="mt-8 p-6 bg-white bg-opacity-70 backdrop-blur-sm rounded-2xl shadow-lg border border-gray-200">
             <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
               Demo Doctor Credentials
@@ -314,7 +310,7 @@ export default function DoctorLogin() {
                   <span className="mr-2">👨‍⚕️</span> Doctor Account
                 </h4>
                 <p className="text-blue-600 ml-6 text-sm mt-1">
-                  ID: `dr123`
+                  Email: `dr123@hospital.com`
                 </p>
                 <p className="text-blue-600 ml-6 text-sm">
                   Password: `password123`

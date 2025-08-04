@@ -1,4 +1,3 @@
-// ./src/app/page.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -11,9 +10,16 @@ import { motion } from "framer-motion";
 import { Toaster, toast } from "react-hot-toast";
 import { FaUser, FaLock, FaGoogle, FaEye, FaEyeSlash } from "react-icons/fa";
 
+// Import Firebase Authentication services
+import {
+  signInWithEmailAndPassword,
+  AuthError,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase";
+
 const schema = yup.object().shape({
-  email: yup.string().email().required("Email is required"),
-  password: yup.string().min(6).required("Password is required"),
+  email: yup.string().email("Please enter a valid email").required("Email is required"),
+  password: yup.string().min(6, "Password must be at least 6 characters").required("Password is required"),
 });
 
 type FormData = {
@@ -24,11 +30,6 @@ type FormData = {
 type RememberedUser = {
   email: string;
   password: string;
-};
-
-type APIUser = {
-  patientemail: string;
-  patientpassword: string;
 };
 
 export default function LoginPage() {
@@ -59,38 +60,70 @@ export default function LoginPage() {
     "Your one-stop solution for finding the right doctor. We connect patients with healthcare professionals. Schedule appointments and manage your health easily. Join us today and take control of your health journey!";
 
   const onSubmit = async (data: FormData) => {
+    setErrorMsg(""); // Clear any previous errors
     try {
-      const res = await fetch(
-        "https://6888ba66adf0e59551bb2689.mockapi.io/v1/patientlogin"
-      );
-      const users: APIUser[] = await res.json();
-
-      const match = users.find(
-        (u) => u.patientemail === data.email && u.patientpassword === data.password
-      );
-
-      if (match) {
-        if (rememberMe) {
-          const remembered = JSON.parse(
-            localStorage.getItem("rememberedUsers") || "[]"
-          ) as RememberedUser[];
-          const filtered = remembered.filter((u) => u.email !== data.email);
-          filtered.push({ email: data.email, password: data.password });
-          localStorage.setItem("rememberedUsers", JSON.stringify(filtered));
-        } else {
-          localStorage.removeItem("rememberedUsers");
-        }
-
-        toast.success("Logged in ✅");
-        router.push("/dashboard");
+      // Use Firebase's signInWithEmailAndPassword function
+      await signInWithEmailAndPassword(auth, data.email, data.password);
+      
+      // On successful login
+      if (rememberMe) {
+        const remembered = JSON.parse(
+          localStorage.getItem("rememberedUsers") || "[]"
+        ) as RememberedUser[];
+        const filtered = remembered.filter((u) => u.email !== data.email);
+        filtered.push({ email: data.email, password: data.password });
+        localStorage.setItem("rememberedUsers", JSON.stringify(filtered));
       } else {
-        setErrorMsg("Invalid email or password ❌");
+        localStorage.removeItem("rememberedUsers");
       }
+
+      toast.success("Logged in successfully ✅");
+      router.push("/dashboard");
     } catch (err) {
-      console.error(err);
-      setErrorMsg("Login failed. Try again.");
+      const firebaseError = err as AuthError;
+      console.error(firebaseError);
+
+      let message = "An unexpected error occurred. Please try again.";
+      // Provide user-friendly error messages based on Firebase error codes
+      switch (firebaseError.code) {
+        case "auth/invalid-email":
+          message = "The email address is not valid.";
+          break;
+        case "auth/user-not-found":
+          message = "No account found with this email.";
+          break;
+        case "auth/wrong-password":
+        case "auth/invalid-credential":
+          message = "Invalid email or password.";
+          break;
+        default:
+          message = "Login failed. Please check your credentials.";
+          break;
+      }
+      setErrorMsg(message);
     }
   };
+  
+  // This is the updated function
+  const handleGoogleLogin = () => {
+    // Set the login type to patient
+    setLoginType("patient");
+    
+    // Automatically fill in the patient credentials
+    setValue("email", "googleuser@gmail.com");
+    setValue("password", "google123");
+    
+    // Set rememberMe and showPassword for a seamless demo
+    setRememberMe(true);
+    setShowPassword(true);
+
+    // Call the form's submit handler to log in with the new values
+    handleSubmit(onSubmit)();
+    
+    // Display a toast message
+    toast.success("Attempting patient login...");
+  };
+  
 
   useEffect(() => {
     setValue("email", "");
@@ -271,6 +304,7 @@ export default function LoginPage() {
                   <FaUser className="text-gray-400 ml-3" />
                   <input
                     type="email"
+                    {...register("email")}
                     onChange={handleEmailChange}
                     className="w-full px-4 py-3 border-0 focus:outline-none bg-transparent text-gray-800"
                     value={getValues("email")}
@@ -367,11 +401,7 @@ export default function LoginPage() {
                 type="button"
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => {
-                  setValue("email", "googleuser@gmail.com");
-                  setValue("password", "google123");
-                  setShowPassword(true);
-                }}
+                onClick={handleGoogleLogin} // Call the new Google login function
                 className="w-full flex items-center justify-center gap-3 border border-gray-300 py-3 rounded-lg bg-white transition-all shadow-sm font-medium"
               >
                 <FaGoogle className="text-red-500" />
@@ -379,7 +409,7 @@ export default function LoginPage() {
               </motion.button>
 
               <p className="text-sm text-center mt-5 text-gray-600">
-                Don&apos;t have an account?{" "} {/* Corrected apostrophe here */}
+                Don&apos;t have an account?{" "}
                 <a
                   href="/signup"
                   className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
@@ -403,7 +433,7 @@ export default function LoginPage() {
                   <span className="mr-2">👨‍⚕️</span> Doctor Account
                 </h4>
                 <p className="text-blue-600 ml-6 text-sm mt-1">
-                  ID: `dr123`
+                  Email: `dr123@hospital.com`
                 </p>
                 <p className="text-blue-600 ml-6 text-sm">
                   Password: `password123`

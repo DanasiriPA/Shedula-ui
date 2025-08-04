@@ -23,19 +23,32 @@ const nextConfig = {
         pathname: "/**",
       },
       {
-        protocol: "https", // Added for placehold.co
-        hostname: "placehold.co", // Added for placehold.co
-        pathname: "/**", // Allows all paths from this hostname
+        protocol: "https",
+        hostname: "placehold.co",
+        pathname: "/**",
       },
       {
-        hostname: 'i.pravatar.cc',
+        protocol: "https",
+        hostname: "i.pravatar.cc",
       },
-      // If you have other external image hosts, add them here
       {
-        hostname: 'i.postimg.cc',
+        protocol: "https",
+        hostname: "i.imgur.com",
       },
+      // Add any other image hosts you need below
     ],
+    // Optional: You can also set default image quality
+    // formats: ['image/webp'],
+    // minimumCacheTTL: 60,
+    // deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    // imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
+  // Other Next.js configurations can go here
+  // reactStrictMode: true,
+  // swcMinify: true,
+  // experimental: {
+  //   appDir: true,
+  // },
 };
 
 module.exports = nextConfig;

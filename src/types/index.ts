@@ -1,13 +1,26 @@
-// src/types/index.ts
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  doc,
+  Timestamp,
+  FieldValue
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export type Slot = {
   time: string;
   available: boolean;
 };
 
-// 隼 Patient-facing Appointment interface
+// Patient-facing Appointment interface (updated for Firebase)
 export interface Appointment {
   id: string;
+  doctorId: string;
   doctorName: string;
   doctorSpecialization: string;
   doctorAvatar: string;
@@ -17,12 +30,16 @@ export interface Appointment {
   token: string;
   patientName: string;
   patientAge: string;
+  patientId: string;
   paymentMethod: 'cash' | 'online';
-  // Standardized status types for patient view
-  status: 'Upcoming' | 'Cancelled' | 'Completed';
+  status: 'Pending' | 'Accepted' | 'Rescheduled' | 'Cancelled' | 'Completed';
+  reason?: string;
+  consultationFee: number;
+  location: string;
+  createdAt: Timestamp | FieldValue;
 }
 
-// 隼 Detailed Appointment (admin/dashboard view)
+// Detailed Appointment (admin/dashboard view)
 export type DetailedAppointment = {
   id: number;
   doctorId: string;
@@ -32,7 +49,6 @@ export type DetailedAppointment = {
   date: string;
   time: string;
   token: string;
-  // Standardized status types for admin view
   status: 'Upcoming' | 'Visited' | 'Cancelled' | 'Completed' | 'Confirmed';
   createdAt: string;
   notes: string;
@@ -42,7 +58,7 @@ export type DetailedAppointment = {
   description?: string;
 };
 
-// 隼 Medicine interfaces
+// Medicine interfaces
 export interface Medicine {
   id: string;
   name: string;
@@ -67,7 +83,7 @@ export interface MedicineOrder {
   deliveryNote: string;
 }
 
-// 隼 Doctor interfaces
+// Doctor interfaces
 export interface Doctor {
   id: string;
   name: string;
@@ -116,7 +132,7 @@ export interface DoctorProfile {
   description: string;
 }
 
-// 隼 Doctor-facing PatientAppointment interface
+// Doctor-facing PatientAppointment interface
 export interface PatientAppointment {
   id: string;
   patientName: string;
@@ -134,9 +150,12 @@ export interface PatientAppointment {
   token: string;
   patientAge: string;
   paymentMethod: 'cash' | 'online';
+  consultationFee: number;
+  location: string;
+  createdAt: Timestamp | FieldValue;
 }
 
-// 隼 DoctorPatient interface
+// DoctorPatient interface
 export interface DoctorPatient {
   id: string;
   name: string;
@@ -150,51 +169,50 @@ export interface DoctorPatient {
   notes: string;
 }
 
-// Functions to interact with localStorage for appointments
-export const getAppointments = (): PatientAppointment[] => {
-  if (typeof window === 'undefined') {
-    return [];
-  }
+// Firebase-specific functions (replacing localStorage functions)
+export const getAppointments = async (userId: string): Promise<Appointment[]> => {
   try {
-    const storedAppointments = localStorage.getItem('patientAppointments');
-    const parsedAppointments: any[] = storedAppointments ? JSON.parse(storedAppointments) : [];
-    // Explicitly cast properties to their literal types to prevent type widening
-    return parsedAppointments.map(app => ({
-      ...app,
-      type: app.type as PatientAppointment['type'],
-      // The status must be cast to one of the defined literals
-      status: app.status as PatientAppointment['status'],
-      paymentMethod: app.paymentMethod as PatientAppointment['paymentMethod'],
-    })) as PatientAppointment[];
+    const q = query(
+      collection(db, "appointments"),
+      where("patientId", "==", userId)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Appointment));
   } catch (error) {
-    console.error("Failed to parse appointments from localStorage", error);
+    console.error("Error fetching appointments:", error);
     return [];
   }
 };
 
-export const saveAppointments = (appointments: PatientAppointment[]) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('patientAppointments', JSON.stringify(appointments));
+export const addAppointment = async (appointment: Omit<Appointment, 'id'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "appointments"), appointment);
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding appointment:", error);
+    throw error;
   }
 };
 
-export const addAppointment = (newAppointment: PatientAppointment) => {
-  const appointments = getAppointments();
-  appointments.push(newAppointment);
-  saveAppointments(appointments);
-};
-
-export const updateAppointment = (updatedAppointment: PatientAppointment) => {
-  const appointments = getAppointments();
-  const index = appointments.findIndex(app => app.id === updatedAppointment.id);
-  if (index !== -1) {
-    appointments[index] = updatedAppointment;
-    saveAppointments(appointments);
+export const updateAppointment = async (appointmentId: string, updates: Partial<Appointment>): Promise<void> => {
+  try {
+    const appointmentRef = doc(db, "appointments", appointmentId);
+    await updateDoc(appointmentRef, updates);
+  } catch (error) {
+    console.error("Error updating appointment:", error);
+    throw error;
   }
 };
 
-export const deleteAppointment = (appointmentId: string) => {
-  const appointments = getAppointments();
-  const filteredAppointments = appointments.filter(app => app.id !== appointmentId);
-  saveAppointments(filteredAppointments);
+export const deleteAppointment = async (appointmentId: string): Promise<void> => {
+  try {
+    const appointmentRef = doc(db, "appointments", appointmentId);
+    await deleteDoc(appointmentRef);
+  } catch (error) {
+    console.error("Error deleting appointment:", error);
+    throw error;
+  }
 };

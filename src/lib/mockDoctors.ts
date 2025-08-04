@@ -7,6 +7,7 @@ export type Slot = {
 
 export type Doctor = {
   id: string;
+  uid: string; // Required for all doctors
   name: string;
   specialization: string;
   education: string;
@@ -78,11 +79,12 @@ const generateMockDoctors = (): Doctor[] => {
   for (let i = 0; i < 70; i++) {
     const city = cities[Math.floor(Math.random() * cities.length)];
     const spec = specializations[Math.floor(Math.random() * specializations.length)];
-    const name = indianNames[Math.floor(Math.random() * indianNames.length)]; // Corrected: Randomly select a name
-    const avatar = avatarImages[Math.floor(Math.random() * avatarImages.length)]; // Corrected: Randomly select an avatar
+    const name = indianNames[Math.floor(Math.random() * indianNames.length)];
+    const avatar = avatarImages[Math.floor(Math.random() * avatarImages.length)];
     
     mockDoctors.push({
       id: (id++).toString(),
+      uid: "b2FxNOgwPuhynq3lJUPvHaQOJV82", // Same UID for ALL doctors
       name: `Dr. ${name}`,
       specialization: spec.name,
       education: spec.education,
