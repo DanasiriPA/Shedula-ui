@@ -50,7 +50,7 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
   const appointmentDateTime = new Date(`${appointment.date}T${appointment.time}`);
   const isPastAppointment = appointmentDateTime < new Date();
 
-  if (isPastAppointment || appointment.status !== 'Pending') {
+  if (isPastAppointment || appointment.status !== 'upcoming') {
     return null; // Don't show reminder option for past or non-upcoming appointments
   }
 

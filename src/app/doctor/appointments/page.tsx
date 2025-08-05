@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback,useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
@@ -10,14 +10,14 @@ import {
   FaCalendarCheck, FaClock, FaCalendarTimes, FaTimes, FaUserMd, FaChevronLeft, 
   FaUserCircle, FaStethoscope, FaBriefcaseMedical,
   FaMapMarkerAlt, FaRupeeSign, FaEdit, FaTrash, FaLaptopMedical, FaCalendarAlt,
-  FaSignOutAlt
+  FaSignOutAlt, FaListUl
 } from 'react-icons/fa';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDate } from "@/lib/utils";
 import { Calendar, dateFnsLocalizer, Event } from 'react-big-calendar';
 import withDragAndDrop, { EventInteractionArgs } from 'react-big-calendar/lib/addons/dragAndDrop';
-import { format, parse, startOfWeek, getDay } from 'date-fns';
+import { format, parse, startOfWeek, getDay, addMinutes, isBefore } from 'date-fns';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 
@@ -92,9 +92,16 @@ export default function DoctorAppointmentsPage() {
     const [activeTab, setActiveTab] = useState<'upcoming' | 'completed' | 'canceled' | 'rescheduled'>('upcoming');
     const [calendarDate, setCalendarDate] = useState(new Date());
     const [calendarView, setCalendarView] = useState<'day' | 'week' | 'month'>('week');
+    const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
     const router = useRouter();
+    
+    const appointmentCounts = useMemo(() => ({
+    upcoming: appointments.filter(a => a.status === 'upcoming').length,
+    completed: appointments.filter(a => a.status === 'completed').length,
+    canceled: appointments.filter(a => a.status === 'canceled').length,
+    rescheduled: appointments.filter(a => a.status === 'rescheduled').length
+    }), [appointments]);
 
-    // Generate dates for the next 7 days
     const generateNext7Days = () => {
         const dates = [];
         const today = new Date();
@@ -107,22 +114,21 @@ export default function DoctorAppointmentsPage() {
     };
 
     const calculateTimeRemaining = (appointmentDate: string, appointmentTime: string) => {
-        const [hours, minutes] = appointmentTime.split(':').map(Number);
-        const appointmentDateTime = new Date(appointmentDate);
-        appointmentDateTime.setHours(hours, minutes, 0, 0);
+    const [hours, minutes] = appointmentTime.split(':').map(Number);
+    const appointmentDateTime = new Date(appointmentDate);
+    appointmentDateTime.setHours(hours, minutes, 0, 0);
 
-        const now = new Date();
-        const diffMs = appointmentDateTime.getTime() - now.getTime();
+    const now = new Date();
+    const diffMs = appointmentDateTime.getTime() - now.getTime();
 
-        if (diffMs <= 0) return 'Appointment completed';
+    if (diffMs <= 0) return 'Appointment completed';
 
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
-        return `${diffDays}d ${diffHours}h ${diffMinutes}m remaining`;
-    };
-
+    return `${diffDays}d ${diffHours}h ${diffMinutes}m remaining`;
+  };
     const fetchDoctorAvailability = useCallback(async () => {
         if (!user) return;
 
@@ -141,75 +147,85 @@ export default function DoctorAppointmentsPage() {
     }, [user]);
 
     const fetchAppointments = useCallback(async () => {
-        setLoading(true);
-        try {
-            const q = query(
-                collection(db, "appointments"),
-                where("doctorId", "==", "b2FxNOgwPuhynq3lJUPvHaQOJV82")
-            );
-            const querySnapshot = await getDocs(q);
+    setLoading(true);
+    try {
+        const q = query(
+            collection(db, "appointments"),
+            where("doctorId", "==", "b2FxNOgwPuhynq3lJUPvHaQOJV82")
+        );
+        const querySnapshot = await getDocs(q);
 
-            const allAppointments: Appointment[] = [];
-            const now = new Date();
-            const updatePromises: Promise<void>[] = [];
+        const allAppointments: Appointment[] = [];
+        const now = new Date();
+        const updatePromises: Promise<void>[] = [];
 
-            querySnapshot.forEach((doc) => {
-                const data = doc.data();
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            
+            if (data.doctorName && data.date && data.time && data.status && data.patientId) {
+                // Always use the CURRENT scheduled time (date + time)
+                const currentDateTime = new Date(`${data.date}T${data.time}`);
                 
-                if (data.doctorName && data.date && data.time && data.status && data.patientId) {
-                    const appointmentDateTime = new Date(`${data.date}T${data.time}`);
-                    const isCompleted = appointmentDateTime < now && data.status === 'upcoming';
-                    
-                    if (isCompleted) {
-                        updatePromises.push(
-                            updateDoc(doc.ref, { 
-                                status: 'completed',
-                                timeRemaining: 'Appointment completed'
-                            })
-                        );
-                    }
+                // Calculate time remaining based on CURRENT schedule
+                const timeRemainingValue = currentDateTime < now 
+                    ? 'Appointment completed'
+                    : calculateTimeRemaining(data.date, data.time);
 
-                    const appointment: Appointment = {
-                        id: doc.id,
-                        doctorId: data.doctorId,
-                        doctorName: data.doctorName,
-                        doctorSpecialization: data.doctorSpecialization,
-                        doctorAvatar: data.doctorAvatar,
-                        date: data.date,
-                        time: data.time,
-                        type: data.type,
-                        token: data.token,
-                        patientName: data.patientName,
-                        patientAge: data.patientAge,
-                        patientId: data.patientId,
-                        status: isCompleted ? 'completed' : data.status,
-                        consultationFee: data.consultationFee,
-                        location: data.location,
-                        createdAt: data.createdAt,
-                        paymentMethod: data.paymentMethod || 'unknown',
-                        timeRemaining: isCompleted 
-                            ? 'Appointment completed'
-                            : calculateTimeRemaining(data.date, data.time),
-                        originalDate: data.originalDate,
-                        originalTime: data.originalTime
-                    };
+                // Only mark as completed if:
+                // 1. The current time is past the appointment time
+                // 2. The status is either upcoming or rescheduled
+                const shouldComplete = currentDateTime < now && 
+                    (data.status === 'upcoming' || data.status === 'rescheduled');
 
-                    allAppointments.push(appointment);
+                if (shouldComplete) {
+                    updatePromises.push(
+                        updateDoc(doc.ref, { 
+                            status: 'completed',
+                            timeRemaining: timeRemainingValue
+                        })
+                    );
                 }
-            });
 
-            if (updatePromises.length > 0) {
-                await Promise.all(updatePromises);
+                const appointment: Appointment = {
+                    id: doc.id,
+                    doctorId: data.doctorId,
+                    doctorName: data.doctorName,
+                    doctorSpecialization: data.doctorSpecialization,
+                    doctorAvatar: data.doctorAvatar,
+                    date: data.date,
+                    time: data.time,
+                    type: data.type,
+                    token: data.token,
+                    patientName: data.patientName,
+                    patientAge: data.patientAge,
+                    patientId: data.patientId,
+                    status: shouldComplete ? 'completed' : data.status,
+                    consultationFee: data.consultationFee,
+                    location: data.location,
+                    createdAt: data.createdAt,
+                    paymentMethod: data.paymentMethod || 'unknown',
+                    timeRemaining: timeRemainingValue,
+                    originalDate: data.originalDate,
+                    originalTime: data.originalTime
+                };
+
+                allAppointments.push(appointment);
             }
+        });
 
-            setAppointments(allAppointments);
-
-        } catch (error) {
-            console.error("Error fetching appointments:", error);
-        } finally {
-            setLoading(false);
+        if (updatePromises.length > 0) {
+            await Promise.all(updatePromises);
         }
-    }, []);
+
+        setAppointments(allAppointments);
+
+    } catch (error) {
+        console.error("Error fetching appointments:", error);
+    } finally {
+        setLoading(false);
+    }
+}, []);
+
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -254,32 +270,32 @@ export default function DoctorAppointmentsPage() {
     }, [newDate]);
 
     const handleReschedule = async (appointmentId: string) => {
-        if (!newDate || !newTime) return;
+    if (!newDate || !newTime) return;
 
-        try {
-            const appointmentRef = doc(db, "appointments", appointmentId);
-            const appointment = appointments.find(a => a.id === appointmentId);
-            
-            await updateDoc(appointmentRef, {
-                date: newDate,
-                time: newTime,
-                timeRemaining: calculateTimeRemaining(newDate, newTime),
-                status: 'rescheduled',
-                originalDate: appointment?.originalDate || appointment?.date,
-                originalTime: appointment?.originalTime || appointment?.time
-            });
-            
-            if (user) {
-                await fetchAppointments();
-            }
-            setReschedulingId(null);
-            setNewDate('');
-            setNewTime('');
-            setConsultationType(null);
-        } catch (error) {
-            console.error("Error rescheduling appointment:", error);
+    try {
+        const appointmentRef = doc(db, "appointments", appointmentId);
+        const appointment = appointments.find(a => a.id === appointmentId);
+        
+        await updateDoc(appointmentRef, {
+            date: newDate,
+            time: newTime,
+            timeRemaining: calculateTimeRemaining(newDate, newTime),
+            status: 'rescheduled',
+            originalDate: appointment?.date,  // Store current date as original
+            originalTime: appointment?.time   // Store current time as original
+        });
+        
+        if (user) {
+            await fetchAppointments();
         }
-    };
+        setReschedulingId(null);
+        setNewDate('');
+        setNewTime('');
+        setConsultationType(null);
+    } catch (error) {
+        console.error("Error rescheduling appointment:", error);
+    }
+};
 
     const handleCancel = async (appointmentId: string) => {
         try {
@@ -292,100 +308,115 @@ export default function DoctorAppointmentsPage() {
                 await fetchAppointments();
             }
             setShowCancelConfirm(null);
+            setSelectedEvent(null);
         } catch (error) {
             console.error("Error canceling appointment:", error);
         }
     };
 
     const onEventDrop = async (args: EventInteractionArgs<CalendarEvent>) => {
-        try {
-            const { event, start } = args;
+    try {
+        const { event, start } = args;
+        const now = new Date();
 
-            // Ensure start is a Date
-            if (!(start instanceof Date)) {
-                console.error("Invalid start date:", start);
-                return;
-            }
+        // Ensure start is a Date object
+        const startDate = start instanceof Date ? start : new Date(start);
 
-            const newDate = start.toISOString().split('T')[0];
-            const newTime = format(start, 'HH:mm');
-
-            const appointmentRef = doc(db, "appointments", event.id);
-            const appointment = appointments.find(a => a.id === event.id);
-            
-            await updateDoc(appointmentRef, {
-                date: newDate,
-                time: newTime,
-                timeRemaining: calculateTimeRemaining(newDate, newTime),
-                status: 'rescheduled',
-                originalDate: appointment?.originalDate || appointment?.date,
-                originalTime: appointment?.originalTime || appointment?.time
-            });
-
-            if (user) {
-                await fetchAppointments();
-            }
-        } catch (error) {
-            console.error("Error rescheduling via drag-and-drop:", error);
+        if (event.appointment.status === 'canceled' || event.appointment.status === 'completed') {
+            return;
         }
-    };
+
+        if (isBefore(startDate, now)) {
+            alert('Cannot reschedule to past date/time');
+            return;
+        }
+
+        const newDate = startDate.toISOString().split('T')[0];
+        const newTime = format(startDate, 'HH:mm');
+
+        const appointmentRef = doc(db, "appointments", event.id);
+        const appointment = appointments.find(a => a.id === event.id);
+        
+        await updateDoc(appointmentRef, {
+            date: newDate,
+            time: newTime,
+            timeRemaining: calculateTimeRemaining(newDate, newTime),
+            status: 'rescheduled',
+            originalDate: appointment?.originalDate || appointment?.date,
+            originalTime: appointment?.originalTime || appointment?.time
+        });
+
+        if (user) {
+            await fetchAppointments();
+        }
+    } catch (error) {
+        console.error("Error rescheduling via drag-and-drop:", error);
+    }
+};
 
     const eventStyleGetter = (event: CalendarEvent) => {
-        let backgroundColor = '';
-        let borderColor = '';
-        
-        switch (event.appointment.status) {
-            case 'upcoming':
-                backgroundColor = '#10B981'; // green-500
-                borderColor = '#059669'; // green-600
-                break;
-            case 'rescheduled':
-                backgroundColor = '#F59E0B'; // yellow-500
-                borderColor = '#D97706'; // yellow-600
-                break;
-            case 'canceled':
-                backgroundColor = '#EF4444'; // red-500
-                borderColor = '#DC2626'; // red-600
-                break;
-            default:
-                backgroundColor = '#3B82F6'; // blue-500
-                borderColor = '#2563EB'; // blue-600
+    let backgroundColor = '';
+    let borderColor = '';
+    let cursor = 'pointer';
+    let textDecoration = 'none';
+    
+    switch (event.appointment.status) {
+        case 'upcoming':
+            backgroundColor = '#3B82F6'; // blue-500
+            borderColor = '#2563EB'; // blue-600
+            break;
+        case 'rescheduled':
+            backgroundColor = '#F59E0B'; // yellow-500
+            borderColor = '#D97706'; // yellow-600
+            break;
+        case 'canceled':
+            backgroundColor = '#EF4444'; // red-500
+            borderColor = '#DC2626'; // red-600
+            cursor = 'not-allowed';
+            textDecoration = 'line-through';
+            break;
+        case 'completed':
+            backgroundColor = '#10B981'; // green-500
+            borderColor = '#059669'; // green-600
+            cursor = 'default';
+            break;
+        default:
+            backgroundColor = '#3B82F6'; // blue-500
+            borderColor = '#2563EB'; // blue-600
+    }
+
+    return {
+        style: {
+            backgroundColor,
+            borderColor,
+            borderRadius: '4px',
+            opacity: 0.9,
+            color: 'white',
+            border: '0px',
+            display: 'block',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease',
+            cursor,
+            textDecoration,
+            padding: '2px 5px',
+            fontSize: '0.8rem'
         }
-
-        return {
-            style: {
-                backgroundColor,
-                borderColor,
-                borderRadius: '4px',
-                opacity: 0.8,
-                color: 'white',
-                border: '0px',
-                display: 'block'
-            }
-        };
     };
+};
 
-    const events: CalendarEvent[] = appointments
-        .filter(app => app.status !== 'completed')
-        .map(app => ({
-            id: app.id,
-            title: `${app.patientName} - ${app.type}`,
-            start: new Date(`${app.date}T${app.time}`),
-            end: new Date(new Date(`${app.date}T${app.time}`).getTime() + 30 * 60000),
-            appointment: app
-        }));
+    const events = useMemo(() => appointments.map(app => ({
+    id: app.id,
+    title: `${app.patientName} - ${app.type}`,
+    start: new Date(`${app.date}T${app.time}`),
+    end: addMinutes(new Date(`${app.date}T${app.time}`), 30),
+    appointment: app
+    })), [appointments]);
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-gray-200">
-                <p className="text-xl text-gray-700">Loading appointments...</p>
-            </div>
-        );
-    }
-
-    if (!user) {
-        return null;
-    }
+    useEffect(() => {
+    console.log('Total appointments:', appointments.length);
+    console.log('Calendar events:', events.length);
+    console.log('List view counts:', appointmentCounts);
+    }, [appointments, events, appointmentCounts]);
 
     const renderAppointmentCard = (app: Appointment) => (
         <motion.div
@@ -446,10 +477,10 @@ export default function DoctorAppointmentsPage() {
                         </div>
                         <div className="flex flex-col items-center gap-2">
                             <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                                app.status === 'upcoming' ? 'bg-green-100 text-green-800' :
+                                app.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
                                 app.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
                                 app.status === 'canceled' ? 'bg-red-100 text-red-800' :
-                                'bg-blue-100 text-blue-800'
+                                'bg-green-100 text-green-800'
                             }`}>
                                 {app.status.toUpperCase()}
                             </span>
@@ -560,6 +591,103 @@ export default function DoctorAppointmentsPage() {
         </motion.div>
     );
 
+    const renderAppointmentDetails = (event: CalendarEvent) => {
+        const app = event.appointment;
+        const now = new Date();
+        const appointmentTime = new Date(`${app.date}T${app.time}`);
+        const isPastAppointment = isBefore(appointmentTime, now);
+        
+        return (
+            <div className="p-6">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4">{app.patientName}</h3>
+                <div className="space-y-3">
+                    <p className="flex items-center gap-3 text-gray-700">
+                        <FaCalendarCheck className="text-blue-500" /> 
+                        <span className="font-medium">Date:</span> {formatDate(app.date)} at {app.time}
+                    </p>
+                    <p className="flex items-center gap-3 text-gray-700">
+                        <FaUserMd className="text-blue-500" /> 
+                        <span className="font-medium">Patient:</span> {app.patientName} ({app.patientAge} years)
+                    </p>
+                    <p className="flex items-center gap-3 text-gray-700">
+                        {app.type === 'Online Consultation' ? 
+                            <FaLaptopMedical className="text-purple-500" /> : 
+                            <FaMapMarkerAlt className="text-purple-500" />}
+                        <span className="font-medium">Type:</span> {app.type}
+                    </p>
+                    <p className="flex items-center gap-3 text-gray-700">
+                        <FaRupeeSign className="text-amber-500" /> 
+                        <span className="font-medium">Fee:</span> ₹{app.consultationFee}
+                    </p>
+                    <p className="flex items-center gap-3 text-gray-700">
+                        <FaClock className={
+                            app.timeRemaining === 'Appointment completed' 
+                                ? "text-gray-500" 
+                                : "text-green-500"
+                        } /> 
+                        <span className="font-medium">Status:</span> 
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                            app.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
+                            app.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
+                            app.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                            'bg-green-100 text-green-800'
+                        }`}>
+                            {app.status.toUpperCase()}
+                        </span>
+                    </p>
+                    {app.status === 'rescheduled' && app.originalDate && app.originalTime && (
+                        <p className="flex items-center gap-3 text-gray-500 text-sm">
+                            <FaCalendarTimes className="text-yellow-500" />
+                            <span className="font-medium">Originally:</span> {formatDate(app.originalDate)} at {app.originalTime}
+                        </p>
+                    )}
+                </div>
+
+                <div className="mt-6 flex gap-3 flex-wrap">
+                    {app.status === 'upcoming' && !isPastAppointment && (
+                        <>
+                            <button
+                                onClick={() => {
+                                    setReschedulingId(app.id);
+                                    setNewDate(app.date);
+                                    setNewTime(app.time);
+                                    setSelectedEvent(null);
+                                }}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                            >
+                                <FaEdit /> Reschedule
+                            </button>
+                            <button
+                                onClick={() => setShowCancelConfirm(app.id)}
+                                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+                            >
+                                <FaTimes /> Cancel
+                            </button>
+                        </>
+                    )}
+                    <button
+                        onClick={() => setSelectedEvent(null)}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors ml-auto"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-gray-200">
+                <p className="text-xl text-gray-700">Loading appointments...</p>
+            </div>
+        );
+    }
+
+    if (!user) {
+        return null;
+    }
+
     return (
         <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
             <style jsx global>{`
@@ -573,31 +701,139 @@ export default function DoctorAppointmentsPage() {
                     background: white;
                     border-radius: 0.5rem;
                     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    font-family: inherit;
                 }
                 .rbc-toolbar {
                     padding: 1rem;
                     background: #f8fafc;
                     border-radius: 0.5rem 0.5rem 0 0;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.5rem;
+                    align-items: center;
+                }
+                .rbc-toolbar button {
+                    color: #4b5563;
+                    border: 1px solid #d1d5db;
+                    padding: 0.375rem 0.75rem;
+                    border-radius: 0.375rem;
+                    transition: all 0.2s;
+                    font-weight: 500;
+                    background: white;
+                }
+                .rbc-toolbar button:hover {
+                    background-color: #e5e7eb;
+                }
+                .rbc-toolbar button.rbc-active {
+                    background-color: #3b82f6;
+                    color: white;
+                    border-color: #3b82f6;
+                }
+                .rbc-header {
+                    padding: 0.75rem 0.5rem;
+                    background: #f3f4f6;
+                    font-weight: 600;
+                    color: #374151;
+                }
+                .rbc-day-bg + .rbc-day-bg,
+                .rbc-header + .rbc-header {
+                    border-left: 1px solid #e5e7eb;
+                }
+                .rbc-month-row + .rbc-month-row {
+                    border-top: 1px solid #e5e7eb;
+                }
+                .rbc-off-range-bg {
+                    background: #f9fafb;
+                }
+                .rbc-today {
+                    background-color: #e0f2fe;
                 }
                 .rbc-event {
-                    border-radius: 0.25rem;
-                    padding: 0.25rem 0.5rem;
+                    border-radius: 6px;
+                    padding: 4px 8px;
                     color: white;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+                    margin: 2px 0;
+                    font-weight: 500;
+                    font-size: 0.9rem;
+                }
+                .rbc-event:hover {
+                    opacity: 1;
+                    box-shadow: 0 4px 8px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    transform: translateY(-1px);
                 }
                 .rbc-event-content {
-                    font-size: 0.875rem;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 }
                 .rbc-day-slot .rbc-event {
                     border-left: 4px solid;
                 }
-                .rbc-today {
-                    background-color: #e0f2fe;
+                .rbc-time-view {
+                    border-radius: 0 0 0.5rem 0.5rem;
+                }
+                .rbc-time-header {
+                    border-radius: 0.5rem 0.5rem 0 0;
+                    overflow: hidden;
+                }
+                .rbc-time-content {
+                    border-radius: 0 0 0.5rem 0.5rem;
+                    border-top: 1px solid #e5e7eb;
+                }
+                .rbc-timeslot-group {
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .rbc-time-gutter {
+                    color: #6b7280;
+                    font-size: 0.875rem;
+                    font-weight: 500;
+                }
+                .rbc-agenda-view table.rbc-agenda-table {
+                    border-radius: 0.5rem;
+                    overflow: hidden;
+                }
+                .rbc-agenda-view table.rbc-agenda-table thead > tr > th {
+                    background: #f3f4f6;
+                    padding: 0.75rem;
+                }
+                .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+                    padding: 0.75rem;
+                    border-bottom: 1px solid #e5e7eb;
+                }
+                .rbc-agenda-time-cell {
+                    color: #6b7280;
+                }
+                .rbc-agenda-date-cell {
+                    font-weight: 600;
+                }
+                .rbc-month-view {
+                    border-radius: 0 0 0.5rem 0.5rem;
+                }
+                .rbc-month-header {
+                    border-radius: 0.5rem 0.5rem 0 0;
+                }
+                .rbc-date-cell {
+                    padding: 0.5rem;
+                    font-weight: 500;
+                }
+                .rbc-date-cell.rbc-now {
+                    font-weight: 600;
+                    color: #3b82f6;
+                }
+                .rbc-row-bg + .rbc-row-bg {
+                    border-top: 1px solid #e5e7eb;
+                }
+                .rbc-day-bg {
+                    border-right: 1px solid #e5e7eb;
+                    border-bottom: 1px solid #e5e7eb;
                 }
             `}</style>
 
             <div className="absolute inset-0 z-0 bg-white bg-medical-pattern"></div>
 
-            {/* Header/Navbar */}
             <motion.div
                 className={`fixed top-0 left-0 right-0 z-50 py-5 px-8 flex justify-between items-center transition-all duration-300 rounded-b-3xl shadow-xl bg-white/90 backdrop-blur-md border-b-2 border-transparent bg-origin-border bg-clip-border bg-gradient-to-br from-blue-200 via-white to-purple-200`}
             >
@@ -656,19 +892,19 @@ export default function DoctorAppointmentsPage() {
                     <div className="flex gap-4 bg-white p-2 rounded-xl shadow-md">
                         <button
                             onClick={() => setView('list')}
-                            className={`px-6 py-2 rounded-lg transition-colors ${
+                            className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
                                 view === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                         >
-                            List View
+                            <FaListUl /> List View
                         </button>
                         <button
                             onClick={() => setView('calendar')}
-                            className={`px-6 py-2 rounded-lg transition-colors ${
+                            className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
                                 view === 'calendar' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                         >
-                            Calendar View
+                            <FaCalendarAlt /> Calendar View
                         </button>
                     </div>
                 </div>
@@ -679,55 +915,100 @@ export default function DoctorAppointmentsPage() {
 
                 {view === 'list' ? (
                     <section className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                            <motion.div 
+                                whileHover={{ y: -5 }}
+                                className="bg-blue-100 p-6 rounded-xl shadow-md border-l-4 border-blue-500"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-medium text-blue-800">Upcoming</h3>
+                                    <FaCalendarCheck className="text-blue-500 text-2xl" />
+                                </div>
+                                <p className="text-3xl font-bold text-blue-900 mt-2">{appointmentCounts.upcoming}</p>
+                            </motion.div>
+                            <motion.div 
+                                whileHover={{ y: -5 }}
+                                className="bg-yellow-100 p-6 rounded-xl shadow-md border-l-4 border-yellow-500"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-medium text-yellow-800">Rescheduled</h3>
+                                    <FaCalendarTimes className="text-yellow-500 text-2xl" />
+                                </div>
+                                <p className="text-3xl font-bold text-yellow-900 mt-2">{appointmentCounts.rescheduled}</p>
+                            </motion.div>
+                            <motion.div 
+                                whileHover={{ y: -5 }}
+                                className="bg-green-100 p-6 rounded-xl shadow-md border-l-4 border-green-500"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-medium text-green-800">Completed</h3>
+                                    <FaCalendarCheck className="text-green-500 text-2xl" />
+                                </div>
+                                <p className="text-3xl font-bold text-green-900 mt-2">{appointmentCounts.completed}</p>
+                            </motion.div>
+                            <motion.div 
+                                whileHover={{ y: -5 }}
+                                className="bg-red-100 p-6 rounded-xl shadow-md border-l-4 border-red-500"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-lg font-medium text-red-800">Canceled</h3>
+                                    <FaTimes className="text-red-500 text-2xl" />
+                                </div>
+                                <p className="text-3xl font-bold text-red-900 mt-2">{appointmentCounts.canceled}</p>
+                            </motion.div>
+                        </div>
+
                         <div className="flex justify-center mb-6">
                             <div className="inline-flex rounded-md shadow-sm">
                                 <button
                                     onClick={() => setActiveTab('upcoming')}
-                                    className={`px-6 py-2 text-sm font-medium rounded-l-lg ${
+                                    className={`px-6 py-2 text-sm font-medium rounded-l-lg flex items-center gap-2 ${
                                         activeTab === 'upcoming' 
                                             ? 'bg-blue-600 text-white' 
                                             : 'bg-white text-gray-700 hover:bg-gray-100'
                                     }`}
                                 >
-                                    Upcoming
+                                    <FaCalendarCheck /> Upcoming
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('rescheduled')}
-                                    className={`px-6 py-2 text-sm font-medium ${
+                                    className={`px-6 py-2 text-sm font-medium flex items-center gap-2 ${
                                         activeTab === 'rescheduled' 
                                             ? 'bg-yellow-500 text-white' 
                                             : 'bg-white text-gray-700 hover:bg-gray-100'
                                     }`}
                                 >
-                                    Rescheduled
+                                    <FaCalendarTimes /> Rescheduled
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('completed')}
-                                    className={`px-6 py-2 text-sm font-medium ${
+                                    className={`px-6 py-2 text-sm font-medium flex items-center gap-2 ${
                                         activeTab === 'completed' 
-                                            ? 'bg-blue-600 text-white' 
+                                            ? 'bg-green-600 text-white' 
                                             : 'bg-white text-gray-700 hover:bg-gray-100'
                                     }`}
                                 >
-                                    Completed
+                                    <FaCalendarCheck /> Completed
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('canceled')}
-                                    className={`px-6 py-2 text-sm font-medium rounded-r-lg ${
+                                    className={`px-6 py-2 text-sm font-medium rounded-r-lg flex items-center gap-2 ${
                                         activeTab === 'canceled' 
                                             ? 'bg-red-600 text-white' 
                                             : 'bg-white text-gray-700 hover:bg-gray-100'
                                     }`}
                                 >
-                                    Canceled
+                                    <FaTimes /> Canceled
                                 </button>
                             </div>
                         </div>
 
                         {appointments.filter(a => a.status === activeTab).length > 0 ? (
-                            appointments
-                                .filter(a => a.status === activeTab)
-                                .map(app => renderAppointmentCard(app))
+                            <div className="space-y-6">
+                                {appointments
+                                    .filter(a => a.status === activeTab)
+                                    .map(app => renderAppointmentCard(app))}
+                            </div>
                         ) : (
                             <motion.div
                                 initial={{ opacity: 0 }}
@@ -750,9 +1031,9 @@ export default function DoctorAppointmentsPage() {
                             defaultView="week"
                             view={calendarView}
                             onView={(view) => {
-                            if (view === 'day' || view === 'week' || view === 'month') {
-                                setCalendarView(view);
-                            }
+                                if (view === 'day' || view === 'week' || view === 'month') {
+                                    setCalendarView(view);
+                                }
                             }}
                             views={['day', 'week', 'month']}
                             min={new Date(0, 0, 0, 9, 0, 0)}
@@ -790,8 +1071,10 @@ export default function DoctorAppointmentsPage() {
                                                 Next
                                             </button>
                                         </span>
-                                        <span className="rbc-toolbar-label">{props.label}</span>
-                                        <span className="rbc-btn-group">
+                                        <span className="rbc-toolbar-label font-semibold text-gray-800">
+                                            {props.label}
+                                        </span>
+                                        <span className="rbc-btn-group ml-auto">
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -825,21 +1108,55 @@ export default function DoctorAppointmentsPage() {
                                         </span>
                                     </div>
                                 ),
+                                event: ({ event }) => (
+                                    <div className="rbc-event-content">
+                                        <div className="font-medium">{event.title}</div>
+                                        <div className="text-xs opacity-90">
+                                            {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
+                                        </div>
+                                    </div>
+                                )
                             }}
-                            onSelectSlot={() => {}} // Add new appointment functionality
+                            onSelectSlot={() => {}}
                             onSelectEvent={(event: CalendarEvent) => {
-                                const appointment = event.appointment;
-                                setReschedulingId(appointment.id);
-                                setNewDate(appointment.date);
-                                setNewTime(appointment.time);
-                                setConsultationType(appointment.type === 'Online Consultation' ? 'online' : 'clinic');
+                                if (event.appointment.status !== 'canceled' && event.appointment.status !== 'completed') {
+                                    setSelectedEvent(event);
+                                }
                             }}
                         />
                     </div>
                 )}
             </div>
 
-            {/* Cancel Confirmation Modal */}
+            <AnimatePresence>
+                {selectedEvent && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-gray-400 bg-opacity-50 flex items-center justify-center p-4 z-50 backdrop-blur-sm"
+                        onClick={() => setSelectedEvent(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 50 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 50 }}
+                            className="bg-white rounded-3xl shadow-2xl relative max-w-md w-full max-h-[90vh] overflow-y-auto"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                type="button"
+                                onClick={() => setSelectedEvent(null)}
+                                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <FaTimes size={24} />
+                            </button>
+                            {renderAppointmentDetails(selectedEvent)}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             <AnimatePresence>
                 {showCancelConfirm && (
                     <motion.div
@@ -892,7 +1209,7 @@ export default function DoctorAppointmentsPage() {
                     </motion.div>
                 )}
             </AnimatePresence>
-            {/* Footer */}
+            
             <footer className="bg-gradient-to-br from-blue-900 to-purple-900 text-white py-12 px-8 mt-16">
                 <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
                     <div>

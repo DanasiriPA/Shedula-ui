@@ -124,14 +124,24 @@ const doctorId = useMemo(() => {
 }, [doctorId]);
 
     const availableDates = useMemo(() => {
-        if (!doctor || !consultationType) return [];
-        return Object.keys(doctor.availableSlots[consultationType]);
+    if (!doctor || !consultationType) return [];
+
+    return Object.keys(doctor.availableSlots[consultationType] || {});
     }, [doctor, consultationType]);
 
     const availableTimes = useMemo(() => {
         if (!doctor || !consultationType || !selectedDate) return [];
-        return doctor.availableSlots[consultationType][selectedDate]?.filter(slot => slot.available) || [];
-    }, [doctor, consultationType, selectedDate]);
+        return doctor.availableSlots[consultationType][selectedDate]?.filter(slot => {
+        if (!slot.available) return false;
+
+        const now = new Date();
+        const selected = new Date(selectedDate);
+        const [hours, minutes] = slot.time.split(':').map(Number);
+        selected.setHours(hours, minutes, 0, 0);
+
+        return selected > now;
+        }) || [];
+        }, [doctor, consultationType, selectedDate]);
 
     useEffect(() => {
         setSelectedDate('');
@@ -241,12 +251,17 @@ const doctorId = useMemo(() => {
             </div>
         );
     }
-
-    {return (
-        <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
-
+    console.log('Available dates:', {
+    rawDates: availableDates,
+    next7Days: Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        return d.toISOString().split('T')[0];
+    })
+    });
     return (
         <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
+
             <style jsx global>{`
                 .bg-medical-pattern {
                     background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2393c5fd' fill-opacity='0.4'%3E%3Cpath d='M20 40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0-20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm40-40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2z'/%3E%3Cpath d='M42 20h-4v-4h-4v4h-4v4h4v4h4v-4h4v-4zm0 40h-4v-4h-4v4h-4v4h4v4h4v-4h4v-4z'/%3E%3C/g%3E%3C/svg%3E");
@@ -329,6 +344,7 @@ const doctorId = useMemo(() => {
                                         height={144}
                                         className="rounded-full object-cover"
                                     />
+                                    
                                 </div>
                                 <div className="flex-grow text-center md:text-left">
                                     <h2 className="text-3xl font-bold text-gray-900 mb-1">{doctor.name}</h2>
@@ -425,26 +441,51 @@ const doctorId = useMemo(() => {
                                 </div>
 
                                 {consultationType && (
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2 text-gray-700">Select Date:</label>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                            {availableDates.map(date => (
+                                <div>
+                                    <label className="block text-sm font-semibold mb-2 text-gray-700">Select Date:</label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                                        {Array.from({ length: 7 }).map((_, index) => {
+                                            const date = new Date();
+                                            date.setDate(date.getDate() + index);
+                                            date.setHours(0, 0, 0, 0);
+                                            
+                                            // Format as YYYY-MM-DD to match your data format
+                                            const dateString = date.toISOString().split('T')[0];
+                                            const isFutureOrToday = (() => {
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            const normalizedDate = new Date(date);
+                                            normalizedDate.setHours(0, 0, 0, 0);
+                                            return normalizedDate >= today;
+                                            })();
+
+                                            const isAvailable = doctor?.availableSlots?.[consultationType]?.[dateString]?.length > 0 && isFutureOrToday;
+                                            
+                                            
+                                            return (
                                                 <button
-                                                    key={date}
+                                                    key={dateString}
                                                     type="button"
-                                                    onClick={() => setSelectedDate(date)}
+                                                    onClick={() => isAvailable && setSelectedDate(dateString)}
+                                                    disabled={!isAvailable}
                                                     className={`p-3 rounded-lg text-sm font-medium transition-colors ${
-                                                        selectedDate === date
+                                                        selectedDate === dateString
                                                             ? 'bg-blue-600 text-white shadow-md'
-                                                            : 'bg-gray-100 text-gray-700 hover:bg-blue-100'
+                                                            : isAvailable
+                                                                ? 'bg-gray-100 text-gray-700 hover:bg-blue-100'
+                                                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                                     }`}
                                                 >
-                                                    {formatDate(date)}
+                                                    {formatDate(dateString)}
                                                 </button>
-                                            ))}
-                                        </div>
+                                            );
+                                        })}
                                     </div>
-                                )}
+                                    {availableDates.length === 0 && (
+                                        <p className="text-sm text-gray-500 mt-2">No available dates in the next 7 days</p>
+                                    )}
+                                </div>
+                            )}
 
                                 {selectedDate && (
                                     <div>
@@ -636,4 +677,4 @@ const doctorId = useMemo(() => {
         </footer>
         </div>
     );
-</div>); }}
+    }

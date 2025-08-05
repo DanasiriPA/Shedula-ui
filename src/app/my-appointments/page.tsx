@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { 
   FaCalendarCheck, FaClock, FaCalendarTimes, FaTimes, FaChevronLeft, 
@@ -12,7 +12,6 @@ import {
 } from 'react-icons/fa';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatDate } from "@/lib/utils";
 
 interface Appointment {
     id: string;
@@ -27,7 +26,7 @@ interface Appointment {
     patientName: string;
     patientAge: string;
     patientId: string;
-    status: 'upcoming' | 'completed' | 'canceled';
+    status: 'upcoming' | 'completed' | 'canceled' | 'rescheduled' | 'booked' | 'confirmed';
     consultationFee: number;
     location: string;
     createdAt: string;
@@ -35,29 +34,54 @@ interface Appointment {
     timeRemaining?: string;
 }
 
-interface Slot {
-    time: string;
-    available: boolean;
-}
-
 export default function MyAppointmentsPage() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
-    const [upcomingAppointments, setUpcomingAppointments] = useState<Appointment[]>([]);
-    const [pastAppointments, setPastAppointments] = useState<Appointment[]>([]);
-    const [canceledAppointments, setCanceledAppointments] = useState<Appointment[]>([]);
-    const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'canceled'>('upcoming');
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
+    const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'canceled' | 'rescheduled'>('upcoming');
     const [reschedulingId, setReschedulingId] = useState<string | null>(null);
     const [newDate, setNewDate] = useState('');
     const [newTime, setNewTime] = useState('');
     const [showCancelConfirm, setShowCancelConfirm] = useState<string | null>(null);
     const [availableDates, setAvailableDates] = useState<string[]>([]);
-    const [availableTimes, setAvailableTimes] = useState<Slot[]>([]);
-    const [, setConsultationType] = useState<'online' | 'clinic' | null>(null);
     const router = useRouter();
 
-    // Generate dates for the next 7 days
-    const generateNext7Days = () => {
+    // Handle different date formats from Firebase
+    const normalizeDate = (date: string | Timestamp | Date): Date => {
+    if (date instanceof Timestamp) return date.toDate();
+    if (typeof date === 'string') return new Date(date);
+    return date; // Already a Date
+    };
+
+    const formatDate = (dateInput: string | Timestamp): string => {
+    const date = normalizeDate(dateInput);
+    const options: Intl.DateTimeFormatOptions = { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+    };
+    return date.toLocaleDateString(undefined, options);
+    };
+
+    const calculateTimeRemaining = useCallback((date: string | Timestamp, time: string): string => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const appointmentDate = normalizeDate(date);
+    appointmentDate.setHours(hours, minutes, 0, 0);
+
+    const now = new Date();
+    const diffMs = appointmentDate.getTime() - now.getTime();
+
+    if (diffMs <= 0) return 'Appointment completed';
+
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+    if (diffDays > 0) return `${diffDays} day${diffDays > 1 ? 's' : ''} remaining`;
+    if (diffHours > 0) return `${diffHours} hour${diffHours > 1 ? 's' : ''} remaining`;
+    return 'Less than an hour remaining';
+}, []);
+
+    const generateNext7Days = (): string[] => {
         const dates = [];
         const today = new Date();
         for (let i = 0; i < 7; i++) {
@@ -66,23 +90,6 @@ export default function MyAppointmentsPage() {
             dates.push(date.toISOString().split('T')[0]);
         }
         return dates;
-    };
-
-    const calculateTimeRemaining = (appointmentDate: string, appointmentTime: string) => {
-        const [hours, minutes] = appointmentTime.split(':').map(Number);
-        const appointmentDateTime = new Date(appointmentDate);
-        appointmentDateTime.setHours(hours, minutes, 0, 0);
-
-        const now = new Date();
-        const diffMs = appointmentDateTime.getTime() - now.getTime();
-
-        if (diffMs <= 0) return 'Appointment completed';
-
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
-        return `${diffDays}d ${diffHours}h ${diffMinutes}m remaining`;
     };
 
     const fetchAppointments = useCallback(async (uid: string) => {
@@ -101,100 +108,74 @@ export default function MyAppointmentsPage() {
             querySnapshot.forEach((doc) => {
                 const data = doc.data();
                 
-                if (data.doctorName && data.date && data.time && data.status && data.patientId) {
-                    const appointmentDateTime = new Date(`${data.date}T${data.time}`);
-                    const isCompleted = appointmentDateTime < now && data.status === 'upcoming';
-                    
-                    if (isCompleted) {
-                        updatePromises.push(
-                            updateDoc(doc.ref, { 
-                                status: 'completed',
-                                timeRemaining: 'Appointment completed'
-                            })
-                        );
-                    }
-
-                    const appointment: Appointment = {
-                        id: doc.id,
-                        doctorId: data.doctorId,
-                        doctorName: data.doctorName,
-                        doctorSpecialization: data.doctorSpecialization,
-                        doctorAvatar: data.doctorAvatar,
-                        date: data.date,
-                        time: data.time,
-                        type: data.type,
-                        token: data.token,
-                        patientName: data.patientName,
-                        patientAge: data.patientAge,
-                        patientId: data.patientId,
-                        status: isCompleted ? 'completed' : data.status,
-                        consultationFee: data.consultationFee,
-                        location: data.location,
-                        createdAt: data.createdAt,
-                        paymentMethod: data.paymentMethod || 'unknown',
-                        timeRemaining: isCompleted 
-                            ? 'Appointment completed'
-                            : calculateTimeRemaining(data.date, data.time)
-                    };
-
-                    allAppointments.push(appointment);
+                // Skip if essential fields are missing
+                if (!data.doctorName || !data.date || !data.time || !data.status || !data.patientId) {
+                    console.warn('Skipping incomplete appointment:', doc.id);
+                    return;
                 }
+
+                // Normalize status
+                let status = data.status;
+                if (['booked', 'confirmed'].includes(data.status)) {
+                    status = 'upcoming';
+                }
+
+                // Convert date to string format if it's a Timestamp
+                const dateStr = normalizeDate(data.date).toISOString().split('T')[0];
+
+                // Check if appointment is completed
+                const appointmentDateTime = new Date(`${dateStr}T${data.time}`);
+                const isCompleted = appointmentDateTime < now && 
+                    (status === 'upcoming' || status === 'rescheduled');
+
+                if (isCompleted) {
+                    updatePromises.push(
+                        updateDoc(doc.ref, { 
+                            status: 'completed',
+                            timeRemaining: 'Appointment completed'
+                        })
+                    );
+                }
+
+                const appointment: Appointment = {
+                    id: doc.id,
+                    doctorId: data.doctorId || '',
+                    doctorName: data.doctorName,
+                    doctorSpecialization: data.doctorSpecialization || 'General Practitioner',
+                    doctorAvatar: data.doctorAvatar || '/default-avatar.png',
+                    date: dateStr,
+                    time: data.time,
+                    type: data.type || 'Clinic Visit',
+                    token: data.token || '',
+                    patientName: data.patientName || '',
+                    patientAge: data.patientAge || '',
+                    patientId: data.patientId,
+                    status: isCompleted ? 'completed' : status,
+                    consultationFee: data.consultationFee || 0,
+                    location: data.location || '',
+                    createdAt: data.createdAt || new Date().toISOString(),
+                    paymentMethod: data.paymentMethod || 'unknown',
+                    timeRemaining: isCompleted 
+                        ? 'Appointment completed'
+                        : calculateTimeRemaining(dateStr, data.time)
+                };
+
+                allAppointments.push(appointment);
             });
 
-            // Wait for all status updates to complete
             if (updatePromises.length > 0) {
                 await Promise.all(updatePromises);
             }
 
-            const today = new Date();
-            const upcoming = allAppointments.filter(app => 
-                app.status === 'upcoming' && new Date(app.date) >= today
-            );
-            const past = allAppointments.filter(app => 
-                app.status === 'completed' || (new Date(app.date) < today && app.status !== 'canceled')
-            );
-            const canceled = allAppointments.filter(app => app.status === 'canceled');
-
-            setUpcomingAppointments(upcoming);
-            setPastAppointments(past);
-            setCanceledAppointments(canceled);
+            setAppointments(allAppointments);
+            console.log('Fetched appointments:', allAppointments);
 
         } catch (error) {
             console.error("Error fetching appointments:", error);
         } finally {
             setLoading(false);
         }
-    }, []);
-
-    // Auto-update completed appointments periodically
-    useEffect(() => {
-        if (!user) return;
-
-        const interval = setInterval(() => {
-            const now = new Date();
-            const updates: Promise<void>[] = [];
-
-            upcomingAppointments.forEach(app => {
-                const appointmentDateTime = new Date(`${app.date}T${app.time}`);
-                if (appointmentDateTime < now) {
-                    updates.push(
-                        updateDoc(doc(db, "appointments", app.id), { 
-                            status: 'completed',
-                            timeRemaining: 'Appointment completed'
-                        })
-                    );
-                }
-            });
-
-            if (updates.length > 0) {
-                Promise.all(updates)
-                    .then(() => fetchAppointments(user.uid))
-                    .catch(console.error);
-            }
-        }, 60000); // Check every minute
-
-        return () => clearInterval(interval);
-    }, [user, upcomingAppointments, fetchAppointments]);
+    }, [calculateTimeRemaining]);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -211,23 +192,9 @@ export default function MyAppointmentsPage() {
         return () => unsubscribe();
     }, [router, fetchAppointments]);
 
-    // When rescheduling starts, fetch doctor's availability
     useEffect(() => {
-  const next7Days = generateNext7Days();
-  setAvailableDates(next7Days);
-}, []);
-
-    useEffect(() => {
-  if (newDate) {
-    const fixedTimes: Slot[] = [
-      '09:00', '10:00', '11:00', '12:00', '13:00',
-      '14:00', '15:00', '16:00', '17:00', '18:00'
-    ].map(time => ({ time, available: true }));
-
-    setAvailableTimes(fixedTimes);
-    setNewTime('');
-  }
-}, [newDate]);
+        setAvailableDates(generateNext7Days());
+    }, []);
 
     const handleReschedule = async (appointmentId: string) => {
         if (!newDate || !newTime) return;
@@ -237,6 +204,7 @@ export default function MyAppointmentsPage() {
             await updateDoc(appointmentRef, {
                 date: newDate,
                 time: newTime,
+                status: 'rescheduled',
                 timeRemaining: calculateTimeRemaining(newDate, newTime)
             });
             
@@ -246,7 +214,6 @@ export default function MyAppointmentsPage() {
             setReschedulingId(null);
             setNewDate('');
             setNewTime('');
-            setConsultationType(null);
         } catch (error) {
             console.error("Error rescheduling appointment:", error);
         }
@@ -268,6 +235,22 @@ export default function MyAppointmentsPage() {
         }
     };
 
+    // Categorize appointments
+    const upcomingAppointments = appointments.filter(app => {
+        const appDateTime = new Date(`${app.date}T${app.time}`);
+        return (app.status === 'upcoming' || app.status === 'rescheduled') && 
+               appDateTime >= new Date();
+    });
+    
+    const pastAppointments = appointments.filter(app => {
+        const appDateTime = new Date(`${app.date}T${app.time}`);
+        return app.status === 'completed' || 
+               (appDateTime < new Date() && app.status !== 'canceled');
+    });
+    
+    const canceledAppointments = appointments.filter(app => app.status === 'canceled');
+    const rescheduledAppointments = appointments.filter(app => app.status === 'rescheduled');
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-200">
@@ -280,102 +263,102 @@ export default function MyAppointmentsPage() {
         return null;
     }
 
-    const renderAppointmentCard = (app: Appointment, isPast = false) => (
-        <motion.div
-            key={app.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className={`bg-white p-6 rounded-2xl shadow-xl border-2 border-transparent bg-origin-border bg-clip-border bg-gradient-to-br from-blue-50 via-white to-purple-50 ${isPast ? 'opacity-80' : ''}`}
-        >
-            <div className="flex flex-col md:flex-row gap-6">
-                <div className="flex-shrink-0">
-                    <Image 
-                        src={app.doctorAvatar} 
-                        alt={app.doctorName} 
-                        width={100} 
-                        height={100} 
-                        className="rounded-full border-4 border-blue-200 shadow-md" 
-                    />
-                </div>
-                <div className="flex-grow">
-                    <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
-                        <div>
-                            <h3 className="text-2xl font-bold text-gray-900">Dr. {app.doctorName}</h3>
-                            <p className="text-blue-600 font-medium text-lg">{app.doctorSpecialization}</p>
-                            <div className="mt-4 space-y-2">
-                                <p className="flex items-center gap-2 text-gray-700">
-                                    <FaCalendarCheck className="text-blue-500" /> 
-                                    {formatDate(app.date)} at {app.time}
-                                </p>
-                                <p className="flex items-center gap-2 text-gray-700">
-                                    {app.type === 'Online Consultation' ? 
-                                        <FaLaptopMedical className="text-purple-500" /> : 
-                                        <FaMapMarkerAlt className="text-purple-500" />}
-                                    {app.type} ({app.paymentMethod})
-                                </p>
-                                <p className="flex items-center gap-2 text-gray-700">
-                                    <FaUserCircle className="text-blue-500" /> 
-                                    {app.patientName} ({app.patientAge} yrs)
-                                </p>
-                                {app.timeRemaining && (
+    const renderAppointmentCard = (app: Appointment, isPast = false) => {
+        const availableTimes = [
+            '09:00', '10:00', '11:00', '12:00', '13:00',
+            '14:00', '15:00', '16:00', '17:00', '18:00'
+        ].map(time => ({ time, available: true }));
+
+        return (
+            <motion.div
+                key={app.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className={`bg-white p-6 rounded-2xl shadow-xl border-2 border-transparent bg-origin-border bg-clip-border bg-gradient-to-br from-blue-50 via-white to-purple-50 ${isPast ? 'opacity-80' : ''}`}
+            >
+                <div className="flex flex-col md:flex-row gap-6">
+                    <div className="flex-shrink-0">
+                        <Image 
+                            src={app.doctorAvatar} 
+                            alt={app.doctorName} 
+                            width={100} 
+                            height={100} 
+                            className="rounded-full border-4 border-blue-200 shadow-md" 
+                        />
+                    </div>
+                    <div className="flex-grow">
+                        <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+                            <div>
+                                <h3 className="text-2xl font-bold text-gray-900">Dr. {app.doctorName}</h3>
+                                <p className="text-blue-600 font-medium text-lg">{app.doctorSpecialization}</p>
+                                <div className="mt-4 space-y-2">
                                     <p className="flex items-center gap-2 text-gray-700">
-                                        <FaClock className={
-                                            app.timeRemaining === 'Appointment completed' 
-                                                ? "text-gray-500" 
-                                                : "text-green-500"
-                                        } /> 
-                                        {app.timeRemaining}
+                                        <FaCalendarCheck className="text-blue-500" /> 
+                                        {formatDate(app.date)} at {app.time}
                                     </p>
+                                    <p className="flex items-center gap-2 text-gray-700">
+                                        {app.type === 'Online Consultation' ? 
+                                            <FaLaptopMedical className="text-purple-500" /> : 
+                                            <FaMapMarkerAlt className="text-purple-500" />}
+                                        {app.type} ({app.paymentMethod})
+                                    </p>
+                                    <p className="flex items-center gap-2 text-gray-700">
+                                        <FaUserCircle className="text-blue-500" /> 
+                                        {app.patientName} ({app.patientAge} yrs)
+                                    </p>
+                                    {app.timeRemaining && (
+                                        <p className="flex items-center gap-2 text-gray-700">
+                                            <FaClock className={
+                                                app.timeRemaining === 'Appointment completed' 
+                                                    ? "text-gray-500" 
+                                                    : "text-green-500"
+                                            } /> 
+                                            {app.timeRemaining}
+                                        </p>
+                                    )}
+                                    <p className="flex items-center gap-2 text-gray-700">
+                                        <FaRupeeSign className="text-amber-500" /> 
+                                        ₹{app.consultationFee}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center gap-2">
+                                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                                    app.status === 'upcoming' ? 'bg-green-100 text-green-800' :
+                                    app.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                                    app.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
+                                    'bg-blue-100 text-blue-800'
+                                }`}>
+                                    {app.status.toUpperCase()}
+                                </span>
+                                {app.status === 'upcoming' && (
+                                    <div className="flex gap-2 mt-2">
+                                        <button 
+                                            onClick={() => setReschedulingId(app.id)}
+                                            className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                        >
+                                            <FaEdit />
+                                        </button>
+                                        <button 
+                                            onClick={() => setShowCancelConfirm(app.id)}
+                                            className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                                        >
+                                            <FaTrash />
+                                        </button>
+                                    </div>
                                 )}
-                                <p className="flex items-center gap-2 text-gray-700">
-                                    <FaRupeeSign className="text-amber-500" /> 
-                                    ₹{app.consultationFee}
-                                </p>
                             </div>
                         </div>
-                        <div className="flex flex-col items-center gap-2">
-                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                                app.status === 'upcoming' ? 'bg-green-100 text-green-800' :
-                                app.status === 'canceled' ? 'bg-red-100 text-red-800' :
-                                'bg-blue-100 text-blue-800'
-                            }`}>
-                                {app.status.toUpperCase()}
-                            </span>
-                            {app.status === 'upcoming' && (
-                                <div className="flex gap-2 mt-2">
-                                    <button 
-                                        onClick={() => setReschedulingId(app.id)}
-                                        className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
-                                    >
-                                        <FaEdit />
-                                    </button>
-                                    <button 
-                                        onClick={() => setShowCancelConfirm(app.id)}
-                                        className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-                                    >
-                                        <FaTrash />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
 
-                    {reschedulingId === app.id && (
-                        <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                            <h4 className="font-bold text-blue-800 mb-2">Reschedule Appointment</h4>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                                        Consultation Type: {app.type}
-                                    </label>
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                        {availableDates.length > 0 ? (
-                                            availableDates.map(date => (
+                        {reschedulingId === app.id && (
+                            <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                                <h4 className="font-bold text-blue-800 mb-2">Reschedule Appointment</h4>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Date</label>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                                            {availableDates.map(date => (
                                                 <button
                                                     key={date}
                                                     type="button"
@@ -388,19 +371,15 @@ export default function MyAppointmentsPage() {
                                                 >
                                                     {formatDate(date)}
                                                 </button>
-                                            ))
-                                        ) : (
-                                            <p className="text-gray-500 text-sm">No dates found</p>
-                                        )}
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
 
-                                {newDate && (
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">Select Time</label>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                            {availableTimes.length > 0 ? (
-                                                availableTimes.map(slot => (
+                                    {newDate && (
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">Select Time</label>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                {availableTimes.map(slot => (
                                                     <button
                                                         key={slot.time}
                                                         type="button"
@@ -413,42 +392,40 @@ export default function MyAppointmentsPage() {
                                                     >
                                                         {slot.time}
                                                     </button>
-                                                ))
-                                            ) : (
-                                                <p className="text-gray-500 text-sm">No available times for this date</p>
-                                            )}
+                                                ))}
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                <div className="flex gap-2 mt-4">
-                                    <button
-                                        onClick={() => handleReschedule(app.id)}
-                                        disabled={!newDate || !newTime}
-                                        className={`px-4 py-2 rounded-md text-white ${
-                                            !newDate || !newTime ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
-                                        }`}
-                                    >
-                                        Confirm Reschedule
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setReschedulingId(null);
-                                            setNewDate('');
-                                            setNewTime('');
-                                        }}
-                                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
-                                    >
-                                        Cancel
-                                    </button>
+                                    <div className="flex gap-2 mt-4">
+                                        <button
+                                            onClick={() => handleReschedule(app.id)}
+                                            disabled={!newDate || !newTime}
+                                            className={`px-4 py-2 rounded-md text-white ${
+                                                !newDate || !newTime ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'
+                                            }`}
+                                        >
+                                            Confirm Reschedule
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setReschedulingId(null);
+                                                setNewDate('');
+                                                setNewTime('');
+                                            }}
+                                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
-            </div>
-        </motion.div>
-    );
+            </motion.div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
@@ -546,6 +523,14 @@ export default function MyAppointmentsPage() {
                         >
                             Canceled
                         </button>
+                        <button
+                            onClick={() => setActiveTab('rescheduled')}
+                            className={`px-6 py-2 rounded-lg transition-colors ${
+                                activeTab === 'rescheduled' ? 'bg-yellow-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            Rescheduled
+                        </button>
                     </div>
                 </div>
 
@@ -614,6 +599,26 @@ export default function MyAppointmentsPage() {
                             >
                                 <FaCalendarTimes className="text-gray-400 mx-auto mb-4" size={50} />
                                 <p className="text-xl text-gray-600">You have no canceled appointments.</p>
+                            </motion.div>
+                        )}
+                    </section>
+                )}
+
+                {activeTab === 'rescheduled' && (
+                    <section className="space-y-6">
+                        <h2 className="text-2xl font-bold text-yellow-800 mb-6 flex items-center gap-3">
+                            <FaCalendarCheck /> Rescheduled Appointments
+                        </h2>
+                        {rescheduledAppointments.length > 0 ? (
+                            rescheduledAppointments.map(app => renderAppointmentCard(app))
+                        ) : (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="bg-white p-8 text-center rounded-2xl shadow-xl border-2 border-transparent bg-origin-border bg-clip-border bg-gradient-to-br from-blue-50 via-white to-purple-50"
+                            >
+                                <FaCalendarTimes className="text-gray-400 mx-auto mb-4" size={50} />
+                                <p className="text-xl text-gray-600">You have no rescheduled appointments.</p>
                             </motion.div>
                         )}
                     </section>

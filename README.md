@@ -1,60 +1,36 @@
-# 🩺 Doctor Appointment Scheduling Web App
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-A responsive, feature-rich doctor appointment scheduling application built using **Next.js 14**, **TypeScript**, and **Tailwind CSS**, with mock API support via **MockAPI.io**. Designed for real-world functionality, enabling patients to search for doctors, view details, book, reschedule, cancel appointments, add notes, rate doctors, and more.
+## Getting Started
 
-## 🌐 Live Demo
+First, run the development server:
 
-👉 [View App on Vercel](https://shedula-ui-ydbg.vercel.app/)
+```bash
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
+```
 
----
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-## 🚀 Features
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-- 🔍 Filter doctors by specialty, availability, or rating
-- 👨‍⚕️ View full doctor profiles with image, description, and experience
-- 📅 Book appointments with date/time selection
-- 🔁 Reschedule & ❌ cancel appointments with confirmation popups
-- ⭐ Rate doctors per appointment
-- 📝 Add personal notes or doctor's advice
-- 🧾 Separate tab for cancelled appointments
-- 🧪 MockAPI.io integration (No backend setup required)
----
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## 🛠 Tech Stack
+## Learn More
 
-- **Frontend:** Next.js 14, TypeScript, Tailwind CSS
-- **State Handling:** React Hooks
-- **Forms & Validation:** React Hook Form + Yup
-- **Mock Backend:** [MockAPI.io](https://mockapi.io)
-- **Hosting:** [Vercel](https://vercel.com)
+To learn more about Next.js, take a look at the following resources:
 
----
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## 📌 Future Improvements
+## Deploy on Vercel
 
-✅ Authentication system (patient/doctor login)
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-✅ Email/SMS reminder integration
-
-✅ Admin dashboard for doctor management
-
-✅ Real-time chat with doctors
-
-✅ Responsive calendar view
-
-## 🙌 Acknowledgements
-
-Next.js
-
-Tailwind CSS
-
-MockAPI.io
-
-React Hook Form
-
-## 📬 Contact
-
-Created by Danasiri P A
-
-📧 Email: padanasiri@gmail.com
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

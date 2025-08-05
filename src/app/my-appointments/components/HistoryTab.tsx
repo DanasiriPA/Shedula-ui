@@ -53,7 +53,7 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ appointments }) => {
             <p className="flex items-center justify-center gap-2"><FaCalendarAlt className="text-gray-500" /> {new Date(appointment.date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
             <p className="flex items-center justify-center gap-2"><FaClock className="text-gray-500" /> {appointment.time}</p>
             <p className="flex items-center justify-center gap-2">
-              {appointment.status === 'Completed' ? (
+              {appointment.status === 'completed' ? (
                 <span className="text-green-600 flex items-center gap-1">
                   <FaCheckCircle /> Completed
                 </span>
