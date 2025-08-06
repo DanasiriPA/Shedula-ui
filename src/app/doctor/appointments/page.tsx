@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback,useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
@@ -10,7 +10,7 @@ import {
   FaCalendarCheck, FaClock, FaCalendarTimes, FaTimes, FaUserMd, FaChevronLeft, 
   FaUserCircle, FaStethoscope, FaBriefcaseMedical,
   FaMapMarkerAlt, FaRupeeSign, FaEdit, FaTrash, FaLaptopMedical, FaCalendarAlt,
-  FaSignOutAlt, FaListUl
+  FaSignOutAlt, FaListUl, FaFilePrescription
 } from 'react-icons/fa';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -129,6 +129,7 @@ export default function DoctorAppointmentsPage() {
 
     return `${diffDays}d ${diffHours}h ${diffMinutes}m remaining`;
   };
+
     const fetchDoctorAvailability = useCallback(async () => {
         if (!user) return;
 
@@ -225,7 +226,6 @@ export default function DoctorAppointmentsPage() {
         setLoading(false);
     }
 }, []);
-
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -357,7 +357,6 @@ export default function DoctorAppointmentsPage() {
     const eventStyleGetter = (event: CalendarEvent) => {
     let backgroundColor = '';
     let borderColor = '';
-    let cursor = 'pointer';
     let textDecoration = 'none';
     
     switch (event.appointment.status) {
@@ -372,13 +371,11 @@ export default function DoctorAppointmentsPage() {
         case 'canceled':
             backgroundColor = '#EF4444'; // red-500
             borderColor = '#DC2626'; // red-600
-            cursor = 'not-allowed';
             textDecoration = 'line-through';
             break;
         case 'completed':
             backgroundColor = '#10B981'; // green-500
             borderColor = '#059669'; // green-600
-            cursor = 'default';
             break;
         default:
             backgroundColor = '#3B82F6'; // blue-500
@@ -396,7 +393,7 @@ export default function DoctorAppointmentsPage() {
             display: 'block',
             boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
             transition: 'all 0.2s ease',
-            cursor,
+            cursor: 'pointer', // Always show pointer cursor
             textDecoration,
             padding: '2px 5px',
             fontSize: '0.8rem'
@@ -404,19 +401,48 @@ export default function DoctorAppointmentsPage() {
     };
 };
 
-    const events = useMemo(() => appointments.map(app => ({
-    id: app.id,
-    title: `${app.patientName} - ${app.type}`,
-    start: new Date(`${app.date}T${app.time}`),
-    end: addMinutes(new Date(`${app.date}T${app.time}`), 30),
-    appointment: app
-    })), [appointments]);
+    const events = useMemo(() => {
+  const allEvents = appointments.map(app => {
+    try {
+      // Parse the date and time separately
+      const [year, month, day] = app.date.split('-').map(Number);
+      const [hours, minutes] = app.time.split(':').map(Number);
+      
+      // Create a new Date object with the parsed values
+      const start = new Date(year, month - 1, day, hours, minutes);
+      const end = addMinutes(new Date(start), 30);
+      
+      // Validate the dates
+      if (isNaN(start.getTime())) {
+        console.error('Invalid start date for appointment:', app.id, app.date, app.time);
+        return null;
+      }
+      if (isNaN(end.getTime())) {
+        console.error('Invalid end date for appointment:', app.id, app.date, app.time);
+        return null;
+      }
+
+      return {
+        id: app.id,
+        title: `${app.patientName} - ${app.type}`,
+        start,
+        end,
+        appointment: app
+      };
+    } catch (error) {
+      console.error('Error creating event for appointment:', app.id, error);
+      return null;
+    }
+  }).filter(event => event !== null) as CalendarEvent[];
+
+  console.log('Generated events:', allEvents);
+  return allEvents;
+}, [appointments]);
 
     useEffect(() => {
-    console.log('Total appointments:', appointments.length);
-    console.log('Calendar events:', events.length);
-    console.log('List view counts:', appointmentCounts);
-    }, [appointments, events, appointmentCounts]);
+        console.log('Appointments state:', appointments);
+        console.log('Events state:', events);
+    }, [appointments, events]);
 
     const renderAppointmentCard = (app: Appointment) => (
         <motion.div
@@ -592,89 +618,89 @@ export default function DoctorAppointmentsPage() {
     );
 
     const renderAppointmentDetails = (event: CalendarEvent) => {
-        const app = event.appointment;
-        const now = new Date();
-        const appointmentTime = new Date(`${app.date}T${app.time}`);
-        const isPastAppointment = isBefore(appointmentTime, now);
-        
-        return (
-            <div className="p-6">
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">{app.patientName}</h3>
-                <div className="space-y-3">
-                    <p className="flex items-center gap-3 text-gray-700">
-                        <FaCalendarCheck className="text-blue-500" /> 
-                        <span className="font-medium">Date:</span> {formatDate(app.date)} at {app.time}
+    const app = event.appointment;
+    const now = new Date();
+    const appointmentTime = new Date(`${app.date}T${app.time}`);
+    const isPastAppointment = isBefore(appointmentTime, now);
+    
+    return (
+        <div className="p-6">
+            <h3 className="text-2xl font-bold text-gray-900 mb-4">{app.patientName}</h3>
+            <div className="space-y-3">
+                <p className="flex items-center gap-3 text-gray-700">
+                    <FaCalendarCheck className="text-blue-500" /> 
+                    <span className="font-medium">Date:</span> {formatDate(app.date)} at {app.time}
+                </p>
+                <p className="flex items-center gap-3 text-gray-700">
+                    <FaUserMd className="text-blue-500" /> 
+                    <span className="font-medium">Patient:</span> {app.patientName} ({app.patientAge} years)
+                </p>
+                <p className="flex items-center gap-3 text-gray-700">
+                    {app.type === 'Online Consultation' ? 
+                        <FaLaptopMedical className="text-purple-500" /> : 
+                        <FaMapMarkerAlt className="text-purple-500" />}
+                    <span className="font-medium">Type:</span> {app.type}
+                </p>
+                <p className="flex items-center gap-3 text-gray-700">
+                    <FaRupeeSign className="text-amber-500" /> 
+                    <span className="font-medium">Fee:</span> ₹{app.consultationFee}
+                </p>
+                <p className="flex items-center gap-3 text-gray-700">
+                    <FaClock className={
+                        app.timeRemaining === 'Appointment completed' 
+                            ? "text-gray-500" 
+                            : "text-green-500"
+                    } /> 
+                    <span className="font-medium">Status:</span> 
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                        app.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
+                        app.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
+                        app.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                        'bg-green-100 text-green-800'
+                    }`}>
+                        {app.status.toUpperCase()}
+                    </span>
+                </p>
+                {app.status === 'rescheduled' && app.originalDate && app.originalTime && (
+                    <p className="flex items-center gap-3 text-gray-500 text-sm">
+                        <FaCalendarTimes className="text-yellow-500" />
+                        <span className="font-medium">Originally:</span> {formatDate(app.originalDate)} at {app.originalTime}
                     </p>
-                    <p className="flex items-center gap-3 text-gray-700">
-                        <FaUserMd className="text-blue-500" /> 
-                        <span className="font-medium">Patient:</span> {app.patientName} ({app.patientAge} years)
-                    </p>
-                    <p className="flex items-center gap-3 text-gray-700">
-                        {app.type === 'Online Consultation' ? 
-                            <FaLaptopMedical className="text-purple-500" /> : 
-                            <FaMapMarkerAlt className="text-purple-500" />}
-                        <span className="font-medium">Type:</span> {app.type}
-                    </p>
-                    <p className="flex items-center gap-3 text-gray-700">
-                        <FaRupeeSign className="text-amber-500" /> 
-                        <span className="font-medium">Fee:</span> ₹{app.consultationFee}
-                    </p>
-                    <p className="flex items-center gap-3 text-gray-700">
-                        <FaClock className={
-                            app.timeRemaining === 'Appointment completed' 
-                                ? "text-gray-500" 
-                                : "text-green-500"
-                        } /> 
-                        <span className="font-medium">Status:</span> 
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                            app.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
-                            app.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
-                            app.status === 'canceled' ? 'bg-red-100 text-red-800' :
-                            'bg-green-100 text-green-800'
-                        }`}>
-                            {app.status.toUpperCase()}
-                        </span>
-                    </p>
-                    {app.status === 'rescheduled' && app.originalDate && app.originalTime && (
-                        <p className="flex items-center gap-3 text-gray-500 text-sm">
-                            <FaCalendarTimes className="text-yellow-500" />
-                            <span className="font-medium">Originally:</span> {formatDate(app.originalDate)} at {app.originalTime}
-                        </p>
-                    )}
-                </div>
-
-                <div className="mt-6 flex gap-3 flex-wrap">
-                    {app.status === 'upcoming' && !isPastAppointment && (
-                        <>
-                            <button
-                                onClick={() => {
-                                    setReschedulingId(app.id);
-                                    setNewDate(app.date);
-                                    setNewTime(app.time);
-                                    setSelectedEvent(null);
-                                }}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
-                            >
-                                <FaEdit /> Reschedule
-                            </button>
-                            <button
-                                onClick={() => setShowCancelConfirm(app.id)}
-                                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
-                            >
-                                <FaTimes /> Cancel
-                            </button>
-                        </>
-                    )}
-                    <button
-                        onClick={() => setSelectedEvent(null)}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors ml-auto"
-                    >
-                        Close
-                    </button>
-                </div>
+                )}
             </div>
-        );
-    };
+
+            <div className="mt-6 flex gap-3 flex-wrap">
+                {app.status === 'upcoming' && !isPastAppointment && (
+                    <>
+                        <button
+                            onClick={() => {
+                                setReschedulingId(app.id);
+                                setNewDate(app.date);
+                                setNewTime(app.time);
+                                setSelectedEvent(null);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        >
+                            <FaEdit /> Reschedule
+                        </button>
+                        <button
+                            onClick={() => setShowCancelConfirm(app.id)}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+                        >
+                            <FaTimes /> Cancel
+                        </button>
+                    </>
+                )}
+                <button
+                    onClick={() => setSelectedEvent(null)}
+                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors ml-auto"
+                >
+                    Close
+                </button>
+            </div>
+        </div>
+    );
+};
 
     if (loading) {
         return (
@@ -691,6 +717,12 @@ export default function DoctorAppointmentsPage() {
     return (
         <div className="min-h-screen bg-gray-200 text-gray-900 font-inter relative overflow-x-hidden">
             <style jsx global>{`
+                .rbc-event-content {
+                    position: relative;
+                }
+                .group:hover .group-hover\\:block {
+                    display: block;
+                }
                 .bg-medical-pattern {
                     background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2393c5fd' fill-opacity='0.4'%3E%3Cpath d='M20 40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0-20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm40-40c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2zm0 20c0-1.105-0.895-2-2-2s-2 0.895-2 2s0.895 2 2 2s2-0.895 2-2z'/%3E%3Cpath d='M42 20h-4v-4h-4v4h-4v4h4v4h4v-4h4v-4z'/%3E%3C/g%3E%3C/svg%3E");
                     background-size: 80px 80px;
@@ -863,6 +895,13 @@ export default function DoctorAppointmentsPage() {
                     >
                         <FaCalendarAlt className="text-blue-600" /> Appointments
                     </motion.button>
+                    <motion.button 
+                                onClick={() => router.push("/doctor/prescriptions")} 
+                                whileHover={{ y: -3, color: "#4F46E5" }} 
+                                className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 bg-blue-50 text-blue-700"
+                              >
+                                <FaFilePrescription className="text-blue-600" /> Prescriptions
+                              </motion.button>
                     <motion.button onClick={() => router.push("/doctor/patients")} whileHover={{ y: -3, color: "#4F46E5" }} className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100">
                         <FaUserMd className="text-blue-600" /> Patients
                     </motion.button>
@@ -1023,106 +1062,159 @@ export default function DoctorAppointmentsPage() {
                 ) : (
                     <div className="bg-white p-6 rounded-2xl shadow-xl">
                         <DnDCalendar
-                            localizer={localizer}
-                            events={events}
-                            startAccessor={(event: CalendarEvent) => event.start}
-                            endAccessor={(event: CalendarEvent) => event.end}
-                            style={{ height: 700 }}
-                            defaultView="week"
-                            view={calendarView}
-                            onView={(view) => {
-                                if (view === 'day' || view === 'week' || view === 'month') {
-                                    setCalendarView(view);
-                                }
-                            }}
-                            views={['day', 'week', 'month']}
-                            min={new Date(0, 0, 0, 9, 0, 0)}
-                            max={new Date(0, 0, 0, 20, 0, 0)}
-                            onEventDrop={onEventDrop}
-                            resizable
-                            selectable
-                            defaultDate={new Date()}
-                            date={calendarDate}
-                            onNavigate={(date) => setCalendarDate(date)}
-                            eventPropGetter={eventStyleGetter}
-                            components={{
-                                toolbar: (props) => (
-                                    <div className="rbc-toolbar">
-                                        <span className="rbc-btn-group">
-                                            <button
-                                                type="button"
-                                                onClick={() => props.onNavigate('TODAY')}
-                                                className="rbc-btn"
-                                            >
-                                                Today
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => props.onNavigate('PREV')}
-                                                className="rbc-btn"
-                                            >
-                                                Back
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => props.onNavigate('NEXT')}
-                                                className="rbc-btn"
-                                            >
-                                                Next
-                                            </button>
-                                        </span>
-                                        <span className="rbc-toolbar-label font-semibold text-gray-800">
-                                            {props.label}
-                                        </span>
-                                        <span className="rbc-btn-group ml-auto">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setCalendarView('day');
-                                                    props.onView('day');
-                                                }}
-                                                className={`rbc-btn ${calendarView === 'day' ? 'rbc-active' : ''}`}
-                                            >
-                                                Day
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setCalendarView('week');
-                                                    props.onView('week');
-                                                }}
-                                                className={`rbc-btn ${calendarView === 'week' ? 'rbc-active' : ''}`}
-                                            >
-                                                Week
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setCalendarView('month');
-                                                    props.onView('month');
-                                                }}
-                                                className={`rbc-btn ${calendarView === 'month' ? 'rbc-active' : ''}`}
-                                            >
-                                                Month
-                                            </button>
-                                        </span>
-                                    </div>
-                                ),
-                                event: ({ event }) => (
-                                    <div className="rbc-event-content">
-                                        <div className="font-medium">{event.title}</div>
-                                        <div className="text-xs opacity-90">
-                                            {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
-                                        </div>
-                                    </div>
-                                )
-                            }}
-                            onSelectSlot={() => {}}
-                            onSelectEvent={(event: CalendarEvent) => {
-                                if (event.appointment.status !== 'canceled' && event.appointment.status !== 'completed') {
-                                    setSelectedEvent(event);
-                                }
-                            }}
+                        localizer={localizer}
+                        events={events}
+                        startAccessor="start"
+                        endAccessor="end"
+                        popup
+                        style={{ height: 1000 }}
+                        defaultView="week"
+                        view={calendarView}
+                        onView={(view) => {
+                            if (view === 'day' || view === 'week' || view === 'month') {
+                            setCalendarView(view);
+                            }
+                        }}
+                        views={['day', 'week', 'month']}
+                        min={undefined}  // Changed from null to undefined
+                        max={undefined}  // Changed from null to undefined
+                        onEventDrop={onEventDrop}
+                        resizable
+                        selectable
+                        defaultDate={new Date()}
+                        date={calendarDate}
+                        onNavigate={(date) => setCalendarDate(date)}
+                        eventPropGetter={eventStyleGetter}
+                        components={{
+    event: ({ event }) => (
+        <div className="rbc-event-content relative group">
+            <div className="font-medium">{event.title}</div>
+            <div className="text-xs opacity-90">
+                {format(event.start, 'h:mm a')} - {format(event.end, 'h:mm a')}
+            </div>
+            
+            {/* Hover tooltip with full details */}
+            <div className="absolute z-50 left-1/2 transform -translate-x-1/2 -top-2 -translate-y-full hidden group-hover:block w-64 bg-white shadow-xl rounded-lg p-4 border border-gray-200">
+                <h4 className="font-bold text-gray-900">{event.appointment.patientName}</h4>
+                <p className="text-sm text-gray-600">{event.appointment.patientAge} years old</p>
+                <div className="mt-2 space-y-1">
+                    <p className="text-sm flex items-start gap-2">
+                        <FaCalendarCheck className="flex-shrink-0 text-blue-500 mt-0.5" />
+                        <span>
+                            <span className="font-medium">Date:</span> {formatDate(event.appointment.date)} at {event.appointment.time}
+                        </span>
+                    </p>
+                    <p className="text-sm flex items-start gap-2">
+                        {event.appointment.type === 'Online Consultation' ? 
+                            <FaLaptopMedical className="flex-shrink-0 text-purple-500 mt-0.5" /> : 
+                            <FaMapMarkerAlt className="flex-shrink-0 text-purple-500 mt-0.5" />}
+                        <span>
+                            <span className="font-medium">Type:</span> {event.appointment.type}
+                        </span>
+                    </p>
+                    <p className="text-sm flex items-start gap-2">
+                        <FaRupeeSign className="flex-shrink-0 text-amber-500 mt-0.5" />
+                        <span>
+                            <span className="font-medium">Fee:</span> ₹{event.appointment.consultationFee}
+                        </span>
+                    </p>
+                    <p className="text-sm flex items-start gap-2">
+                        <FaClock className={
+                            event.appointment.timeRemaining === 'Appointment completed' 
+                                ? "flex-shrink-0 text-gray-500 mt-0.5" 
+                                : "flex-shrink-0 text-green-500 mt-0.5"
+                        } />
+                        <span>
+                            <span className="font-medium">Status:</span> 
+                            <span className={`ml-1 px-2 py-1 rounded-full text-xs ${
+                                event.appointment.status === 'upcoming' ? 'bg-blue-100 text-blue-800' :
+                                event.appointment.status === 'rescheduled' ? 'bg-yellow-100 text-yellow-800' :
+                                event.appointment.status === 'canceled' ? 'bg-red-100 text-red-800' :
+                                'bg-green-100 text-green-800'
+                            }`}>
+                                {event.appointment.status}
+                            </span>
+                        </span>
+                    </p>
+                    {event.appointment.originalDate && event.appointment.originalTime && (
+                        <p className="text-xs text-gray-500 flex items-start gap-2">
+                            <FaCalendarTimes className="flex-shrink-0 text-yellow-500 mt-0.5" />
+                            <span>
+                                <span className="font-medium">Originally:</span> {formatDate(event.appointment.originalDate)} at {event.appointment.originalTime}
+                            </span>
+                        </p>
+                    )}
+                </div>
+            </div>
+        </div>
+    ),
+                            toolbar: (props) => (
+                            <div className="rbc-toolbar">
+                                <span className="rbc-btn-group">
+                                <button
+                                    type="button"
+                                    onClick={() => props.onNavigate('TODAY')}
+                                    className="rbc-btn"
+                                >
+                                    Today
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => props.onNavigate('PREV')}
+                                    className="rbc-btn"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => props.onNavigate('NEXT')}
+                                    className="rbc-btn"
+                                >
+                                    Next
+                                </button>
+                                </span>
+                                <span className="rbc-toolbar-label font-semibold text-gray-800">
+                                {props.label}
+                                </span>
+                                <span className="rbc-btn-group ml-auto">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                    setCalendarView('day');
+                                    props.onView('day');
+                                    }}
+                                    className={`rbc-btn ${calendarView === 'day' ? 'rbc-active' : ''}`}
+                                >
+                                    Day
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                    setCalendarView('week');
+                                    props.onView('week');
+                                    }}
+                                    className={`rbc-btn ${calendarView === 'week' ? 'rbc-active' : ''}`}
+                                >
+                                    Week
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                    setCalendarView('month');
+                                    props.onView('month');
+                                    }}
+                                    className={`rbc-btn ${calendarView === 'month' ? 'rbc-active' : ''}`}
+                                >
+                                    Month
+                                </button>
+                                </span>
+                            </div>
+                            )
+                        }}
+                        onSelectSlot={() => {}}
+                        onSelectEvent={(event: CalendarEvent) => {
+                        setSelectedEvent(event);
+                        }}
                         />
                     </div>
                 )}

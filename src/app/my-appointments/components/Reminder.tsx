@@ -1,4 +1,3 @@
-// app/my-appointments/components/Reminder.tsx
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaBell, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
@@ -13,8 +12,6 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
   const [showNotification, setShowNotification] = useState<boolean>(false);
 
   useEffect(() => {
-    // In a real app, this would check if a reminder is set for this appointment
-    // For this mock, we'll just simulate it.
     if (typeof window !== 'undefined') {
       const storedReminder = localStorage.getItem(`reminder_${appointment.id}`);
       if (storedReminder === 'set') {
@@ -25,13 +22,10 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
 
   const handleSetReminder = () => {
     if (typeof window !== 'undefined') {
-      // In a real application, you would integrate with browser notifications API
-      // or a backend service to send actual reminders (email/SMS).
-      // For this frontend example, we'll just simulate a confirmation.
       localStorage.setItem(`reminder_${appointment.id}`, 'set');
       setReminderSet(true);
       setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000); // Hide after 3 seconds
+      setTimeout(() => setShowNotification(false), 3000);
       console.log(`Reminder set for appointment with ${appointment.doctorName} on ${appointment.date} at ${appointment.time}`);
     }
   };
@@ -40,18 +34,18 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(`reminder_${appointment.id}`);
       setReminderSet(false);
-      setShowNotification(true); // Show a confirmation of removal
+      setShowNotification(true);
       setTimeout(() => setShowNotification(false), 3000);
       console.log(`Reminder removed for appointment with ${appointment.doctorName}`);
     }
   };
 
-  // Determine if the appointment is in the past
   const appointmentDateTime = new Date(`${appointment.date}T${appointment.time}`);
   const isPastAppointment = appointmentDateTime < new Date();
+  const isUpcoming = !isPastAppointment && appointment.status !== 'Cancelled';
 
-  if (isPastAppointment || appointment.status !== 'upcoming') {
-    return null; // Don't show reminder option for past or non-upcoming appointments
+  if (!isUpcoming) {
+    return null;
   }
 
   return (
@@ -64,7 +58,7 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
       <h4 className="text-2xl font-bold text-blue-700 mb-4 flex items-center justify-center gap-2">
         <FaBell className="text-orange-500" /> Set Reminder
       </h4>
-      
+
       {!reminderSet ? (
         <motion.button
           onClick={handleSetReminder}
@@ -95,9 +89,13 @@ const Reminder: React.FC<ReminderProps> = ({ appointment }) => {
             transition={{ duration: 0.3 }}
           >
             {reminderSet ? (
-                <span className="flex items-center justify-center gap-2"><FaCheckCircle /> Reminder Set Successfully!</span>
+              <span className="flex items-center justify-center gap-2">
+                <FaCheckCircle /> Reminder Set Successfully!
+              </span>
             ) : (
-                <span className="flex items-center justify-center gap-2"><FaTimesCircle /> Reminder Removed!</span>
+              <span className="flex items-center justify-center gap-2">
+                <FaTimesCircle /> Reminder Removed!
+              </span>
             )}
           </motion.p>
         )}

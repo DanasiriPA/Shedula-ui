@@ -18,6 +18,7 @@ import {
   FaChartLine,
   FaUserInjured,
   FaSignOutAlt,
+  FaFilePrescription
 } from 'react-icons/fa';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -174,6 +175,13 @@ export default function DoctorDashboardPage() {
           >
             <FaCalendarAlt className="text-blue-600" /> Appointments
           </motion.button>
+          <motion.button 
+                      onClick={() => router.push("/doctor/prescriptions")} 
+                      whileHover={{ y: -3, color: "#4F46E5" }} 
+                      className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 bg-blue-50 text-blue-700"
+                    >
+                      <FaFilePrescription className="text-blue-600" /> Prescriptions
+                    </motion.button>
           <motion.button 
             onClick={() => router.push("/doctor/patients")} 
             whileHover={{ y: -3, color: "#4F46E5" }} 

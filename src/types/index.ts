@@ -3,12 +3,14 @@ import {
   query,
   where,
   getDocs,
+  getDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   doc,
   Timestamp,
-  FieldValue
+  FieldValue,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
@@ -169,7 +171,29 @@ export interface DoctorPatient {
   notes: string;
 }
 
-// Firebase-specific functions (replacing localStorage functions)
+// Prescription interfaces
+export interface MedicinePrescription {
+  name: string;
+  dosage: string;
+  duration: string;
+  instructions: string;
+}
+
+export interface Prescription {
+  id: string;
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  doctorId: string;
+  doctorName: string;
+  date: string; // YYYY-MM-DD
+  medicines: MedicinePrescription[];
+  notes: string;
+  createdAt: Timestamp | FieldValue;
+  status: 'active' | 'completed' | 'cancelled';
+}
+
+// Firebase-specific functions
 export const getAppointments = async (userId: string): Promise<Appointment[]> => {
   try {
     const q = query(
@@ -214,5 +238,84 @@ export const deleteAppointment = async (appointmentId: string): Promise<void> =>
   } catch (error) {
     console.error("Error deleting appointment:", error);
     throw error;
+  }
+};
+
+// Prescription Firebase functions
+export const getPrescriptions = async (doctorId: string): Promise<Prescription[]> => {
+  try {
+    const q = query(
+      collection(db, "prescriptions"),
+      where("doctorId", "==", doctorId)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Prescription));
+  } catch (error) {
+    console.error("Error fetching prescriptions:", error);
+    return [];
+  }
+};
+
+export const getPrescriptionById = async (id: string): Promise<Prescription | null> => {
+  try {
+    const docRef = doc(db, "prescriptions", id);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as Prescription : null;
+  } catch (error) {
+    console.error("Error fetching prescription:", error);
+    return null;
+  }
+};
+
+export const addPrescription = async (prescription: Omit<Prescription, 'id'>): Promise<string> => {
+  try {
+    const docRef = await addDoc(collection(db, "prescriptions"), {
+      ...prescription,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  } catch (error) {
+    console.error("Error adding prescription:", error);
+    throw error;
+  }
+};
+
+export const updatePrescription = async (prescriptionId: string, updates: Partial<Prescription>): Promise<void> => {
+  try {
+    const prescriptionRef = doc(db, "prescriptions", prescriptionId);
+    await updateDoc(prescriptionRef, updates);
+  } catch (error) {
+    console.error("Error updating prescription:", error);
+    throw error;
+  }
+};
+
+export const deletePrescription = async (prescriptionId: string): Promise<void> => {
+  try {
+    const prescriptionRef = doc(db, "prescriptions", prescriptionId);
+    await deleteDoc(prescriptionRef);
+  } catch (error) {
+    console.error("Error deleting prescription:", error);
+    throw error;
+  }
+};
+
+export const getPrescriptionsByPatient = async (patientId: string): Promise<Prescription[]> => {
+  try {
+    const q = query(
+      collection(db, "prescriptions"),
+      where("patientId", "==", patientId)
+    );
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Prescription));
+  } catch (error) {
+    console.error("Error fetching patient prescriptions:", error);
+    return [];
   }
 };
