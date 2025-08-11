@@ -12,9 +12,9 @@ import {
 
 // Import Firebase modules
 import { db, auth } from '@/lib/firebase';
-import { collection, addDoc } from "firebase/firestore";
+import { collection } from "firebase/firestore";
 import { User } from 'firebase/auth';
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, query, orderBy, limit, getDocs, setDoc } from "firebase/firestore";
 type Slot = {
   time: string;
   available: boolean;
@@ -41,6 +41,35 @@ type Doctor = {
   };
 };
 
+const generateSequentialAppointmentId = async (): Promise<string> => {
+  const HARDCODED_START = 11; // Force starting from app11
+  
+  try {
+    // Get the highest existing appointmentId
+    const q = query(
+      collection(db, "appointments"),
+      orderBy("appointmentId", "desc"),
+      limit(1)
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    if (snapshot.empty) {
+      return `app${HARDCODED_START}`; // First ID will be app11
+    }
+    
+    const lastId = snapshot.docs[0].data().appointmentId;
+    const lastNum = parseInt(lastId.replace('app', ''));
+    
+    // Ensure we never go below app11
+    return `app${Math.max(lastNum + 1, HARDCODED_START)}`;
+    
+  } catch (error) {
+    console.error("Error generating ID:", error);
+    return `app${HARDCODED_START}`; // Fallback to app11
+  }
+};
+
 // Helper function to format date
 const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -56,7 +85,8 @@ const doctorId = useMemo(() => {
     return Array.isArray(id) ? id[0] : id;
 }, [id]);
     type AppointmentDetails = {
-    id?: string;
+    id: string;  // This will be our sequential ID (app1, app2, etc.)
+    appointmentId?: string; // Make this optional if needed
     doctorId: string;
     doctorName: string;
     doctorSpecialization: string;
@@ -173,76 +203,81 @@ const doctorId = useMemo(() => {
     }, []);
 
     const handleBooking = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsBooking(true);
-        setBookingError(null);
-        console.log('Starting booking process...');
+  e.preventDefault();
+  setIsBooking(true);
+  setBookingError(null);
 
-        // Check for user authentication
-        if (!currentUser) {
-            setBookingError("You must be logged in to book an appointment.");
-            setIsBooking(false);
-            router.push('/login');
-            return;
-        }
+  if (!currentUser) {
+    setBookingError("You must be logged in to book an appointment.");
+    setIsBooking(false);
+    router.push('/login');
+    return;
+  }
 
-        if (!doctor || !selectedDate || !selectedTime || !patientName || !patientAge || !consultationType || !paymentMethod) {
-            setBookingError('Please fill out all required fields.');
-            setIsBooking(false);
-            console.log('Validation failed - missing fields');
-            return;
-        }
+  if (!doctor || !selectedDate || !selectedTime || !patientName || !patientAge || !consultationType || !paymentMethod) {
+    setBookingError('Please fill out all required fields.');
+    setIsBooking(false);
+    return;
+  }
 
-        try {
-            const token = generateTokenNumber();
-            const consultationFee = consultationType === 'online' ? doctor.onlinePrice : doctor.clinicPrice;
-            const timeRemaining = calculateTimeRemaining(selectedDate, selectedTime);
-            const newAppointment = {
-                doctorId: doctor.uid, // Changed from doctor.id to doctor.uid, // Doctor's ID from the URL params
-                doctorName: doctor.name,
-                doctorSpecialization: doctor.specialization,
-                doctorAvatar: doctor.avatar,
-                date: selectedDate,
-                time: selectedTime,
-                type: consultationType === 'online' ? 'Online Consultation' : 'Clinic Visit',
-                token,
-                patientName,
-                patientAge,
-                patientId: currentUser.uid, // Current user's UID
-                paymentMethod,
-                status: 'upcoming',
-                consultationFee,
-                location: doctor.location,
-                createdAt: new Date().toISOString(),
-                timeRemaining,
-            };
+  try {
+    // Generate and verify the sequential ID
+    const sequentialId = await generateSequentialAppointmentId();
+    console.log("Generated appointment ID:", sequentialId); // Debug log
+    
+    const token = generateTokenNumber();
+    const consultationFee = consultationType === 'online' ? doctor.onlinePrice : doctor.clinicPrice;
+    const timeRemaining = calculateTimeRemaining(selectedDate, selectedTime);
 
-            console.log('Creating appointment with data:', newAppointment);
-
-            // Send data to Firebase
-            const docRef = await addDoc(collection(db, "appointments"), newAppointment);
-            console.log("Appointment booked with ID: ", docRef.id);
-
-            // Set the state for the confirmation pop-up
-            setAppointmentDetails({ ...newAppointment, id: docRef.id });
-            setShowConfirmation(true);
-            console.log('Show confirmation set to true');
-
-            // Reset form fields after successful booking
-            setSelectedDate('');
-            setSelectedTime('');
-            setPatientName('');
-            setPatientAge('');
-            setConsultationType(null);
-            setPaymentMethod(null);
-
-        } catch (error) {
-            console.error("Booking failed:", error);
-            setBookingError('An error occurred during booking. Please try again.');
-        } finally {
-            setIsBooking(false);
-        }
+    const newAppointment = {
+      doctorId: doctor.uid,
+      doctorName: doctor.name,
+      doctorSpecialization: doctor.specialization,
+      doctorAvatar: doctor.avatar,
+      date: selectedDate,
+      time: selectedTime,
+      type: consultationType === 'online' ? 'Online Consultation' : 'Clinic Visit',
+      token,
+      patientName,
+      patientAge,
+      patientId: currentUser.uid,
+      paymentMethod,
+      status: 'upcoming',
+      consultationFee,
+      location: doctor.location,
+      createdAt: new Date().toISOString(),
+      timeRemaining,
+      appointmentId: sequentialId, // This ensures consistency
+      isFromFirebase: true // Marks as Firebase-originated appointment
     };
+
+    // Save to Firestore using the sequential ID as the document ID
+    await setDoc(doc(db, "appointments", sequentialId), newAppointment);
+    
+    // Update confirmation state
+    setAppointmentDetails({
+      ...newAppointment,
+      id: sequentialId,
+      appointmentId: sequentialId
+    });
+    
+    setShowConfirmation(true);
+
+    // Reset form fields
+    setSelectedDate('');
+    setSelectedTime('');
+    setPatientName('');
+    setPatientAge('');
+    setConsultationType(null);
+    setPaymentMethod(null);
+
+  } catch (error) {
+    console.error("Booking failed:", error);
+    setBookingError('An error occurred during booking. Please try again.');
+  } finally {
+    setIsBooking(false);
+  }
+};
 
     if (!doctorId || !doctor) {
         return (
@@ -579,7 +614,14 @@ const doctorId = useMemo(() => {
                             >
                                 <FaTimes size={24} />
                             </button>
-
+                            <div className="bg-blue-50 rounded-lg p-4 mb-6 space-y-2">
+  <div className="flex justify-between items-center">
+    <span className="font-semibold">Appointment ID:</span>
+    <span className="bg-blue-600 text-white px-3 py-1 rounded-full font-bold">
+      {appointmentDetails.id}  {/* Changed from token to id */}
+    </span>
+  </div>
+                            </div>
                             <div className="flex justify-center mb-4">
                                 <FaCheckCircle className="w-16 h-16 text-green-500" />
                             </div>

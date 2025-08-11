@@ -17,6 +17,8 @@
     "firebase-admin": "^13.4.0",
     "framer-motion": "^12.23.12",
     "json-server": "^1.0.0-beta.3",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "next": "15.4.4",
     "react": "19.1.0",
     "react-big-calendar": "^1.19.4",

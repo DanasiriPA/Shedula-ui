@@ -16,18 +16,24 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDate } from "@/lib/utils";
 
+type Slot = 'Morning' | 'Afternoon' | 'Night';
+const ALL_SLOTS: Slot[] = ['Morning','Afternoon','Night'];
+
 interface Medicine {
   name: string;
   dosage: string;
   duration: string;
   instructions: string;
+  // New optional fields
+  frequency?: Slot[]; // e.g. ["Morning","Night"]
+  quantities?: Record<Slot, number>; // e.g. { Morning: 1, Afternoon: 0, Night: 1 }
 }
 
 interface Prescription {
   id: string;
   appointmentId: string;
   patientId: string;
-  patientName: string;
+  patientName?: string; // Mark as optional
   doctorId: string;
   doctorName: string;
   date: string;
@@ -70,28 +76,87 @@ export default function PrescriptionsPage() {
     return () => unsubscribe();
   }, [router]);
 
+  // Helper: normalize a medicine record into current shape
+  const normalizeMedicine = (m: any): Medicine => {
+    // ensure safe defaults
+    const name = m.name || '';
+    const dosage = m.dosage || '';
+    const duration = m.duration || '';
+    const instructions = m.instructions || '';
+
+    // If server already has quantities object, use that (and derive frequency where qty>0)
+    const quantities: Record<Slot, number> = { Morning: 0, Afternoon: 0, Night: 0 };
+
+    if (m.quantities && typeof m.quantities === 'object') {
+      for (const s of ALL_SLOTS) {
+        const maybe = (m.quantities as any)[s];
+        quantities[s] = typeof maybe === 'number' ? maybe : 0;
+      }
+    } else {
+      // Legacy: single quantity fields like quantity or qty
+      const singleQty = typeof m.quantity === 'number' ? m.quantity : (typeof m.qty === 'number' ? m.qty : undefined);
+      // If frequency exists (string or array) and there's a single qty, assign that qty to those slots
+      if (singleQty !== undefined) {
+        const freqArr: Slot[] = Array.isArray(m.frequency) ? m.frequency : (m.frequency ? [m.frequency] : []);
+        for (const s of freqArr) {
+          if (ALL_SLOTS.includes(s as Slot)) quantities[s as Slot] = singleQty;
+        }
+      } else if (m.frequency && Array.isArray(m.frequency)) {
+        // frequencies exist but no quantities -> default selected slots to 1
+        for (const s of m.frequency) {
+          if (ALL_SLOTS.includes(s as Slot)) quantities[s as Slot] = 1;
+        }
+      } else if (m.frequency && typeof m.frequency === 'string') {
+        // single slot string
+        const s = m.frequency;
+        if (ALL_SLOTS.includes(s as Slot)) quantities[s as Slot] = 1;
+      } else {
+        // fallback: nothing
+      }
+    }
+
+    // derive frequency array from quantities > 0 if not provided
+    let frequency: Slot[] = [];
+    if (Array.isArray(m.frequency) && m.frequency.length > 0) {
+      frequency = m.frequency.filter((f: any) => ALL_SLOTS.includes(f));
+    } else {
+      frequency = ALL_SLOTS.filter(s => quantities[s] > 0);
+    }
+
+    return {
+      name,
+      dosage,
+      duration,
+      instructions,
+      frequency,
+      quantities
+    };
+  };
+
   const fetchPrescriptions = async () => {
     setLoading(true);
     try {
       const response = await fetch('https://json-server-7wzo.onrender.com/prescriptions');
       if (response.ok) {
         const data = await response.json();
-        
-        // Assign random statuses to each prescription
-        const prescriptionsWithStatus = data.map((prescription: Prescription) => {
+
+        const prescriptionsWithStatus = data.map((prescription: any) => {
           const statuses: ('active' | 'completed' | 'cancelled')[] = ['active', 'completed', 'cancelled'];
           const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-          
+
+          // Normalize medicines
+          const meds = (prescription.medicines || []).map((m: any) => normalizeMedicine(m));
+
           return {
             ...prescription,
-            status: randomStatus,
-            deleted: prescription.deleted || false
-          };
+            patientName: prescription.patientName || 'Unknown Patient',
+            status: prescription.status || randomStatus,
+            deleted: prescription.deleted || false,
+            medicines: meds
+          } as Prescription;
         });
 
         setPrescriptions(prescriptionsWithStatus);
-      } else {
-        throw new Error('Failed to fetch prescriptions');
       }
     } catch (error) {
       console.error("Error fetching prescriptions:", error);
@@ -254,9 +319,11 @@ export default function PrescriptionsPage() {
     }
     
     const matchesSearch = 
-      p.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.appointmentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.medicines.some(m => m.name.toLowerCase().includes(searchTerm.toLowerCase()));
+      (p.patientName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (p.appointmentId?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      p.medicines?.some(m => 
+        (m.name?.toLowerCase() || '').includes(searchTerm.toLowerCase())
+      );
     
     const matchesStatus = 
       filterStatus === 'all' || 
@@ -276,6 +343,34 @@ export default function PrescriptionsPage() {
   if (!user) {
     return null;
   }
+
+  // helper to render frequency badges for a medicine
+  const renderFrequency = (medicine: Medicine) => {
+    // If frequency available use it; else infer from quantities
+    const freq = (medicine.frequency && medicine.frequency.length > 0)
+      ? medicine.frequency
+      : (medicine.quantities ? ALL_SLOTS.filter(s => (medicine.quantities?.[s] ?? 0) > 0) : []);
+
+    if (!freq || freq.length === 0) {
+      return <span className="text-sm text-gray-500">Frequency: Not specified</span>;
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {freq.map(slot => {
+          const qty = medicine.quantities?.[slot] ?? 0;
+          return (
+            <span
+              key={slot}
+              className="inline-flex items-center gap-2 text-xs font-semibold px-2 py-1 rounded-full bg-blue-100 text-blue-800"
+            >
+              {slot}{qty ? ` (${qty})` : ''}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 text-gray-900 font-inter relative overflow-x-hidden">
@@ -440,7 +535,7 @@ export default function PrescriptionsPage() {
                         ? 'bg-red-100 text-red-600' 
                         : 'bg-blue-100 text-blue-600'
                     }`}>
-                      {prescription.patientName.split(' ').map(n => n[0]).join('')}
+                      {prescription.patientName?.split(' ').map(n => n[0]).join('') || 'NA'}
                     </div>
                   </div>
                   <div className="flex-grow">
@@ -589,7 +684,7 @@ export default function PrescriptionsPage() {
                         {(editingId === prescription.id && editedPrescription ? editedPrescription.medicines : prescription.medicines).map((medicine, index) => (
                           <div key={index} className="p-3 bg-gray-50 rounded-lg">
                             <div className="flex justify-between items-start">
-                              <div>
+                              <div className="w-full">
                                 {editingId === prescription.id && editedPrescription ? (
                                   <>
                                     <input
@@ -597,7 +692,7 @@ export default function PrescriptionsPage() {
                                       value={medicine.name}
                                       onChange={(e) => {
                                         const updatedMedicines = [...editedPrescription.medicines];
-                                        updatedMedicines[index].name = e.target.value;
+                                        updatedMedicines[index] = { ...updatedMedicines[index], name: e.target.value };
                                         setEditedPrescription({
                                           ...editedPrescription,
                                           medicines: updatedMedicines
@@ -611,7 +706,7 @@ export default function PrescriptionsPage() {
                                       value={medicine.dosage}
                                       onChange={(e) => {
                                         const updatedMedicines = [...editedPrescription.medicines];
-                                        updatedMedicines[index].dosage = e.target.value;
+                                        updatedMedicines[index] = { ...updatedMedicines[index], dosage: e.target.value };
                                         setEditedPrescription({
                                           ...editedPrescription,
                                           medicines: updatedMedicines
@@ -625,7 +720,7 @@ export default function PrescriptionsPage() {
                                       value={medicine.duration}
                                       onChange={(e) => {
                                         const updatedMedicines = [...editedPrescription.medicines];
-                                        updatedMedicines[index].duration = e.target.value;
+                                        updatedMedicines[index] = { ...updatedMedicines[index], duration: e.target.value };
                                         setEditedPrescription({
                                           ...editedPrescription,
                                           medicines: updatedMedicines
@@ -639,7 +734,7 @@ export default function PrescriptionsPage() {
                                       value={medicine.instructions}
                                       onChange={(e) => {
                                         const updatedMedicines = [...editedPrescription.medicines];
-                                        updatedMedicines[index].instructions = e.target.value;
+                                        updatedMedicines[index] = { ...updatedMedicines[index], instructions: e.target.value };
                                         setEditedPrescription({
                                           ...editedPrescription,
                                           medicines: updatedMedicines
@@ -648,6 +743,10 @@ export default function PrescriptionsPage() {
                                       className="text-sm text-gray-600 border rounded-lg px-2 py-1 w-full"
                                       placeholder="Instructions"
                                     />
+                                    {/* show frequency badges while editing as info (editing controls could be added later) */}
+                                    <div className="mt-2">
+                                      {renderFrequency(medicine)}
+                                    </div>
                                   </>
                                 ) : (
                                   <>
@@ -657,6 +756,10 @@ export default function PrescriptionsPage() {
                                     {medicine.instructions && (
                                       <p className="text-sm text-gray-600 mt-1">Instructions: {medicine.instructions}</p>
                                     )}
+                                    {/* Display frequency badges */}
+                                    <div className="mt-2">
+                                      {renderFrequency(medicine)}
+                                    </div>
                                   </>
                                 )}
                               </div>
