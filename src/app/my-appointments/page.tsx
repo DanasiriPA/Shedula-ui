@@ -79,6 +79,22 @@ interface MedicalRecord {
   summary?: string;
 }
 
+// Add this interface near your other interfaces
+interface Review {
+  id?: string;
+  appointmentId: string;
+  patientId: string;
+  patientName: string;
+  patientPhoto: string;
+  doctorId: string;
+  rating: number;
+  reviewText: string;
+  reviewDate: string;
+  consultationType: string;
+}
+
+
+
 /* STATIC_HISTORY: same sample data used previously */
 const STATIC_HISTORY: Record<string, MedicalRecord[]> = {
   "patient-1": [
@@ -241,7 +257,12 @@ export default function MyAppointmentsPage() {
       patientName: string;
       records: MedicalRecord[];
     } | null>(null);
-
+    // Add this state to your component
+    const [showReviewModal, setShowReviewModal] = useState<{open: boolean, appointmentId: string | null}>({open: false, appointmentId: null});
+    const [reviewRating, setReviewRating] = useState(0);
+    const [reviewText, setReviewText] = useState('');
+    const [hoverRating, setHoverRating] = useState(0);
+    const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const router = useRouter();
 
     const normalizeDate = (date: string | Timestamp | Date): Date => {
@@ -778,6 +799,14 @@ export default function MyAppointmentsPage() {
                                         </button>
                                     </div>
                                 )}
+                                {app.status === 'completed' && (
+  <button
+    onClick={() => setShowReviewModal({open: true, appointmentId: app.id})}
+    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 mt-2 flex items-center gap-2"
+  >
+    <FaStar /> Leave Review
+  </button>
+)}
                                 <button
                                     onClick={() => handleViewPrescriptions(app.id)}
                                     className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 mt-2 flex items-center gap-2"
@@ -1358,7 +1387,124 @@ export default function MyAppointmentsPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+{/* Review Modal */}
+<AnimatePresence>
+  {showReviewModal.open && (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 bg-gray-900 bg-opacity-75 z-50 flex items-center justify-center p-4"
+      onClick={() => setShowReviewModal({open: false, appointmentId: null})}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.95, y: 20 }}
+        className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={() => setShowReviewModal({open: false, appointmentId: null})}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <FaTimes size={24} />
+        </button>
 
+        <h3 className="text-2xl font-bold text-center text-gray-900 mb-6">
+          Rate Your Experience
+        </h3>
+
+        <div className="flex justify-center mb-6">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <FaStar
+              key={star}
+              size={32}
+              className={`mx-1 cursor-pointer transition-colors ${
+                (hoverRating || reviewRating) >= star
+                  ? 'text-yellow-400'
+                  : 'text-gray-300'
+              }`}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(0)}
+              onClick={() => setReviewRating(star)}
+            />
+          ))}
+        </div>
+
+        <div className="mb-6">
+          <label htmlFor="reviewText" className="block text-sm font-medium text-gray-700 mb-2">
+            Your Feedback
+          </label>
+          <textarea
+            id="reviewText"
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="How was your experience with the doctor?"
+            value={reviewText}
+            onChange={(e) => setReviewText(e.target.value)}
+          />
+        </div>
+
+        <button
+          onClick={async () => {
+            if (!reviewRating || !reviewText || !showReviewModal.appointmentId) return;
+            
+            setIsSubmittingReview(true);
+            try {
+              const appointment = appointments.find(a => a.id === showReviewModal.appointmentId);
+              if (!appointment) throw new Error("Appointment not found");
+              
+              const newReview: Review = {
+                appointmentId: showReviewModal.appointmentId,
+                patientId: user?.uid || '',
+                patientName: appointment.patientName,
+                patientPhoto: "https://randomuser.me/api/portraits/lego/1.jpg", // Default or fetch from user profile
+                doctorId: appointment.doctorId,
+                rating: reviewRating,
+                reviewText: reviewText,
+                reviewDate: new Date().toISOString(),
+                consultationType: appointment.type
+              };
+
+              // Save to JSON server
+              const response = await fetch('https://json-server-7wzo.onrender.com/reviews', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newReview),
+              });
+
+              if (!response.ok) throw new Error("Failed to submit review");
+
+              // Success - reset form
+              setReviewRating(0);
+              setReviewText('');
+              setShowReviewModal({open: false, appointmentId: null});
+              
+              // Show success message
+              alert("Thank you for your feedback!");
+            } catch (error) {
+              console.error("Error submitting review:", error);
+              alert("Failed to submit review. Please try again.");
+            } finally {
+              setIsSubmittingReview(false);
+            }
+          }}
+          disabled={!reviewRating || !reviewText || isSubmittingReview}
+          className={`w-full py-3 rounded-lg text-white font-bold ${
+            (!reviewRating || !reviewText || isSubmittingReview)
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+        </button>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
             {/* Footer */}
             <footer className="bg-gradient-to-br from-blue-900 to-purple-900 text-white py-12 px-8 mt-16">
                 <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8">
