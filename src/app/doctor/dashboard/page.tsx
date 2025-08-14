@@ -18,7 +18,8 @@ import {
   FaChartLine,
   FaUserInjured,
   FaSignOutAlt,
-  FaFilePrescription
+  FaFilePrescription,
+  FaStar
 } from 'react-icons/fa';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
@@ -188,6 +189,13 @@ export default function DoctorDashboardPage() {
             className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100"
           >
             <FaUserInjured className="text-blue-600" /> Patients
+          </motion.button>
+          <motion.button 
+            onClick={() => router.push("/doctor/reviews")} 
+            whileHover={{ y: -3, color: "#4F46E5" }} 
+            className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 bg-blue-50 text-blue-700"
+          >
+            <FaStar className="text-blue-600" /> Reviews
           </motion.button>
         </div>
 

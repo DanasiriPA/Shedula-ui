@@ -10,7 +10,7 @@ import {
   FaGraduationCap, FaCalendarAlt, FaBriefcaseMedical,
   FaClinicMedical, FaGlobe, FaLinkedin, FaTwitter, FaFacebook,
   FaInstagram, FaSignOutAlt, FaUserMd, FaChevronLeft, FaRupeeSign,
-  FaPlus, FaFilePrescription
+  FaPlus, FaFilePrescription, FaStar
 } from 'react-icons/fa';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -334,6 +334,13 @@ export default function DoctorProfilePage() {
           <motion.button onClick={() => router.push("/doctor/patients")} whileHover={{ y: -3, color: "#4F46E5" }} className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100">
             <FaUserMd className="text-blue-600" /> Patients
           </motion.button>
+          <motion.button 
+                      onClick={() => router.push("/doctor/reviews")} 
+                      whileHover={{ y: -3, color: "#4F46E5" }} 
+                      className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 bg-blue-50 text-blue-700"
+                    >
+                      <FaStar className="text-blue-600" /> Reviews
+                    </motion.button>
           <motion.button onClick={() => router.push("/doctor/profile")} whileHover={{ y: -3, color: "#4F46E5" }} className="transition-all flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 bg-blue-50 text-blue-700">
             <FaUserCircle className="text-blue-600" /> Profile
           </motion.button>
